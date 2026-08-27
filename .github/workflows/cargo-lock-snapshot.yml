@@ -6,21 +6,27 @@ on:
       - feature/web-bridge-vertical-slice
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lockfile:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
-      - name: Generate lockfile
-        working-directory: ./src-tauri
-        run: cargo generate-lockfile
-      - name: Upload generated lockfile
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: generated-cargo-lock
-          if-no-files-found: error
-          retention-days: 1
-          path: src-tauri/Cargo.lock
+          ref: feature/web-bridge-vertical-slice
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - name: Generate and commit lockfile when changed
+        working-directory: ./src-tauri
+        shell: bash
+        run: |
+          cargo generate-lockfile
+          if git diff --quiet -- Cargo.lock; then
+            echo "Cargo.lock already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git commit -m "chore: refresh Cargo.lock for web bridge"
+          git push origin HEAD:feature/web-bridge-vertical-slice
