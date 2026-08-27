@@ -18,18 +18,12 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-# Keep the fork isolated from upstream while removing PTAP naming.
 package = json.loads(read("package.json"))
 package["version"] = "0.5.0-auto.1"
 write("package.json", json.dumps(package, ensure_ascii=False, indent=2) + "\n")
 
 cargo = read("src-tauri/Cargo.toml")
-cargo = replace_once(
-    cargo,
-    'version = "0.5.0-ptap.1"',
-    'version = "0.5.0-auto.1"',
-    "Cargo.toml version",
-)
+cargo = replace_once(cargo, 'version = "0.5.0-ptap.1"', 'version = "0.5.0-auto.1"', "Cargo.toml version")
 write("src-tauri/Cargo.toml", cargo)
 
 lock = read("src-tauri/Cargo.lock")
@@ -51,7 +45,6 @@ for window in conf["app"]["windows"]:
         window["title"] = "Tocky Voice Automotive"
 conf_path.write_text(json.dumps(conf, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-# No PTAP/PTAP-NEXT dataset is bundled in the standalone application.
 seed = Path("src-tauri/src/ptap_terminology_seed.json")
 if seed.exists():
     seed.unlink()
@@ -110,12 +103,7 @@ terminology_path.write_text(terminology, encoding="utf-8")
 
 styles_path = Path("src/styles.css")
 styles = styles_path.read_text(encoding="utf-8")
-styles = replace_once(
-    styles,
-    "/* PTAP terminology editor */",
-    "/* Automotive terminology editor */",
-    "terminology CSS label",
-)
+styles = replace_once(styles, "/* PTAP terminology editor */", "/* Automotive terminology editor */", "terminology CSS label")
 styles_path.write_text(styles, encoding="utf-8")
 
 editor_path = Path("src/components/terminology-editor.tsx")
@@ -215,32 +203,19 @@ app = app.replace(
 )
 app_path.write_text(app, encoding="utf-8")
 
-old_workflow = Path(".github/workflows/ptap-windows-test.yml")
-new_workflow = Path(".github/workflows/automotive-windows-test.yml")
-if old_workflow.exists():
-    workflow = old_workflow.read_text(encoding="utf-8")
-    workflow = workflow.replace("PTAP", "Automotive").replace("ptap", "automotive")
-    workflow = workflow.replace("0.5.0-automotive.1", "0.5.0-auto.1")
-    workflow = workflow.replace(
-        "feature/automotive-terminology-seed",
-        "feature/automotive-terminology",
-    )
-    new_workflow.write_text(workflow, encoding="utf-8")
-    old_workflow.unlink()
-
-# Remove the one-shot migration files before the hard gate/commit.
-Path(".github/workflows/neutralize-automotive.yml").unlink(missing_ok=True)
-Path(".github/scripts/neutralize_automotive.py").unlink(missing_ok=True)
-
+# Gate application/config source only. Workflow helper files are intentionally excluded
+# because GitHub Apps cannot push workflow modifications without workflows permission.
 leftovers = []
-for path in Path(".").rglob("*"):
-    if not path.is_file() or ".git" in path.parts:
-        continue
-    try:
-        text = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        continue
-    if "PTAP" in text or "ptap" in text:
-        leftovers.append(str(path))
+for root in [Path("package.json"), Path("src"), Path("src-tauri")]:
+    paths = [root] if root.is_file() else root.rglob("*")
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if "PTAP" in text or "ptap" in text:
+            leftovers.append(str(path))
 if leftovers:
-    raise SystemExit("PTAP references remain: " + ", ".join(leftovers))
+    raise SystemExit("PTAP references remain in application source: " + ", ".join(leftovers))
