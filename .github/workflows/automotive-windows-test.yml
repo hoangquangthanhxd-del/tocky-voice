@@ -1,0 +1,62 @@
+# Produces an unsigned Windows installer for hands-on automotive dictation testing.
+# This is deliberately separate from the signed release workflow: a test build should
+# not need updater signing keys and must never publish a release automatically.
+name: Automotive Windows test build
+
+on:
+  push:
+    branches:
+      - feature/automotive-terminology
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: automotive-windows-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+
+      - uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: ./src-tauri -> target
+          key: windows-automotive-test
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Rust tests
+        working-directory: ./src-tauri
+        run: cargo test --lib
+
+      - name: Build unsigned Windows installers
+        shell: pwsh
+        run: pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Tocky-Voice-Automotive-0.5.0-auto.1-windows
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
