@@ -98,6 +98,26 @@ settings = settings.replace(
 )
 settings_path.write_text(settings, encoding="utf-8")
 
+terminology_path = Path("src-tauri/src/terminology.rs")
+terminology = terminology_path.read_text(encoding="utf-8")
+terminology = replace_once(
+    terminology,
+    "fn maps_common_ptap_domain_aliases() {",
+    "fn maps_common_automotive_domain_aliases() {",
+    "terminology test name",
+)
+terminology_path.write_text(terminology, encoding="utf-8")
+
+styles_path = Path("src/styles.css")
+styles = styles_path.read_text(encoding="utf-8")
+styles = replace_once(
+    styles,
+    "/* PTAP terminology editor */",
+    "/* Automotive terminology editor */",
+    "terminology CSS label",
+)
+styles_path.write_text(styles, encoding="utf-8")
+
 editor_path = Path("src/components/terminology-editor.tsx")
 editor = editor_path.read_text(encoding="utf-8")
 editor, count = re.subn(
