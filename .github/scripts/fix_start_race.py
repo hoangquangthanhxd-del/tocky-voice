@@ -8,6 +8,12 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def replace_first(text: str, old: str, new: str, label: str) -> str:
+    if old not in text:
+        raise SystemExit(f"{label}: expected at least one match")
+    return text.replace(old, new, 1)
+
+
 session_path = Path("src-tauri/src/session/mod.rs")
 text = session_path.read_text()
 
@@ -225,11 +231,11 @@ session_path.write_text(text)
 
 bridge_path = Path("src-tauri/src/web_bridge.rs")
 bridge = bridge_path.read_text()
-bridge = replace_once(
+bridge = replace_first(
     bridge,
     "if app.state::<session::Recorder>().is_recording() {",
     "if app.state::<session::Recorder>().is_busy() {",
-    "bridge busy guard",
+    "bridge prepare busy guard",
 )
 bridge = replace_once(
     bridge,
