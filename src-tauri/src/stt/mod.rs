@@ -1,12 +1,13 @@
 //! Realtime speech-to-text over WebSocket.
 //!
-//! All three vendors follow the same shape — open a socket, optionally send a JSON
+//! All four vendors follow the same shape — open a socket, optionally send a JSON
 //! config frame, stream binary PCM, then send a finalize frame and drain the last
 //! results. Only the URL, auth header, and result JSON differ, so that variation is
 //! isolated behind [`WsProtocol`] and the transport lives here once.
 
 pub mod assemblyai;
 pub mod deepgram;
+pub mod gemini;
 pub mod soniox;
 
 use crate::audio::capture::TARGET_SAMPLE_RATE;
@@ -58,6 +59,11 @@ pub trait WsProtocol: Send {
     fn request(&self) -> Result<Request<()>>;
     /// Configuration frame sent before any audio, if the vendor needs one.
     fn init_message(&self) -> Option<Message>;
+    /// Encodes one chunk of 16 kHz mono PCM16 for this vendor. Most providers take
+    /// binary frames directly; Gemini wraps the bytes as base64 inside `realtimeInput`.
+    fn audio_message(&self, bytes: Vec<u8>) -> Message {
+        Message::Binary(bytes)
+    }
     /// Frame that tells the vendor no more audio is coming.
     fn finish_message(&self) -> Message;
     /// Turn one inbound text frame into zero or more transcript events.
@@ -82,8 +88,11 @@ pub fn build_protocol_with_terminology(
     let terms = crate::terminology::stt_terms(terminology_settings, 100);
     match settings.provider {
         SttProviderKind::Soniox => Box::new(soniox::Soniox::with_terms(settings, api_key, terms)),
-        SttProviderKind::Deepgram => Box::new(deepgram::Deepgram::with_terms(settings, api_key, terms)),
+        SttProviderKind::Deepgram => {
+            Box::new(deepgram::Deepgram::with_terms(settings, api_key, terms))
+        }
         SttProviderKind::AssemblyAi => Box::new(assemblyai::AssemblyAi::new(api_key)),
+        SttProviderKind::Gemini => Box::new(gemini::Gemini::with_terms(settings, api_key, terms)),
     }
 }
 
@@ -127,7 +136,7 @@ pub async fn run_stream(
                     if pending.len() >= MIN_FRAME_BYTES {
                         let frame = std::mem::take(&mut pending);
                         pending.reserve(MIN_FRAME_BYTES * 2);
-                        if let Err(e) = send_bounded(&mut writer, Message::Binary(frame)).await {
+                        if let Err(e) = send_bounded(&mut writer, protocol.audio_message(frame)).await {
                             log::warn!("stt socket unusable while sending audio: {e}");
                             broke_early = Some(format!("the connection dropped mid-take: {e}"));
                             audio_done = true;
@@ -139,7 +148,7 @@ pub async fn run_stream(
                     // The tail is usually shorter than a full frame. Vendors accept a
                     // short final frame; dropping it would clip the last syllable.
                     if !pending.is_empty() {
-                        let tail = Message::Binary(std::mem::take(&mut pending));
+                        let tail = protocol.audio_message(std::mem::take(&mut pending));
                         let _ = send_bounded(&mut writer, tail).await;
                     }
                     let _ = send_bounded(&mut writer, protocol.finish_message()).await;
@@ -178,7 +187,8 @@ pub async fn run_stream(
 
         // Once audio has stopped, give the provider a bounded window to flush.
         if audio_done {
-            match tokio::time::timeout(DRAIN_TIMEOUT, drain(&mut reader, &mut protocol, &events)).await
+            match tokio::time::timeout(DRAIN_TIMEOUT, drain(&mut reader, &mut protocol, &events))
+                .await
             {
                 Ok(Ok(tail)) => {
                     for segment in tail {
@@ -239,7 +249,10 @@ pub async fn probe(settings: &SttSettings, api_key: String) -> Result<()> {
 fn close_reason(frame: Option<&tokio_tungstenite::tungstenite::protocol::CloseFrame>) -> String {
     match frame {
         Some(frame) if !frame.reason.is_empty() => {
-            format!("the provider closed the stream: {} ({})", frame.reason, frame.code)
+            format!(
+                "the provider closed the stream: {} ({})",
+                frame.reason, frame.code
+            )
         }
         Some(frame) => format!("the provider closed the stream (code {})", frame.code),
         None => "the provider closed the stream without saying why".into(),
@@ -298,8 +311,12 @@ mod send_tests {
     /// so a stalled write froze the entire take with the panel left mid-dictation.
     #[tokio::test(start_paused = true)]
     async fn a_socket_that_never_accepts_a_frame_fails_instead_of_hanging() {
-        let result = send_bounded(&mut StalledSink, Message::Binary(vec![0; MIN_FRAME_BYTES])).await;
-        assert!(result.is_err(), "a stalled write has to be reported, not awaited");
+        let result =
+            send_bounded(&mut StalledSink, Message::Binary(vec![0; MIN_FRAME_BYTES])).await;
+        assert!(
+            result.is_err(),
+            "a stalled write has to be reported, not awaited"
+        );
     }
 }
 
@@ -350,14 +367,17 @@ fn append_segment(transcript: &mut String, segment: &str) {
 }
 
 /// Shared helper for vendors that authenticate with a plain header.
-pub(crate) fn request_with_header(url: &str, name: &'static str, value: &str) -> Result<Request<()>> {
+pub(crate) fn request_with_header(
+    url: &str,
+    name: &'static str,
+    value: &str,
+) -> Result<Request<()>> {
     let mut request = url
         .into_client_request()
         .with_context(|| format!("building websocket request for {url}"))?;
-    request.headers_mut().insert(
-        name,
-        value.parse().context("invalid auth header value")?,
-    );
+    request
+        .headers_mut()
+        .insert(name, value.parse().context("invalid auth header value")?);
     Ok(request)
 }
 
@@ -371,7 +391,11 @@ mod frame_tests {
     #[test]
     fn frame_size_sits_inside_every_vendors_accepted_range() {
         let ms = |bytes: usize| bytes as f64 / (TARGET_SAMPLE_RATE as f64 * 2.0) * 1000.0;
-        assert!(ms(MIN_FRAME_BYTES) >= 50.0, "{} ms is too short", ms(MIN_FRAME_BYTES));
+        assert!(
+            ms(MIN_FRAME_BYTES) >= 50.0,
+            "{} ms is too short",
+            ms(MIN_FRAME_BYTES)
+        );
         // Worst case: a full frame that was one byte short, plus a generous 100 ms chunk.
         assert!(ms(MIN_FRAME_BYTES * 2) <= 1000.0);
     }

@@ -94,7 +94,11 @@ impl WsProtocol for Soniox {
             if text.starts_with('<') && text.ends_with('>') {
                 continue;
             }
-            if token.get("is_final").and_then(|f| f.as_bool()).unwrap_or(false) {
+            if token
+                .get("is_final")
+                .and_then(|f| f.as_bool())
+                .unwrap_or(false)
+            {
                 committed.push_str(text);
             } else {
                 interim.push_str(text);

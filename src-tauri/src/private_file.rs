@@ -16,8 +16,7 @@ const DIR_MODE: u32 = 0o700;
 /// Creates a directory owner-only. Existing directories are tightened too, so users
 /// upgrading from an earlier build stop leaking their old recordings.
 pub fn create_dir(path: &Path) -> Result<()> {
-    std::fs::create_dir_all(path)
-        .with_context(|| format!("creating {}", path.display()))?;
+    std::fs::create_dir_all(path).with_context(|| format!("creating {}", path.display()))?;
     restrict_dir(path);
     Ok(())
 }

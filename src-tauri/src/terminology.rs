@@ -50,7 +50,10 @@ pub fn apply(text: &str, settings: &TerminologySettings) -> String {
         }
     }
     candidates.sort_by(|a, b| {
-        b.units.len().cmp(&a.units.len()).then_with(|| b.priority.cmp(&a.priority))
+        b.units
+            .len()
+            .cmp(&a.units.len())
+            .then_with(|| b.priority.cmp(&a.priority))
     });
     if candidates.is_empty() {
         return text.to_string();
@@ -62,7 +65,9 @@ pub fn apply(text: &str, settings: &TerminologySettings) -> String {
     while i < chars.len() {
         let matched = candidates.iter().find(|candidate| {
             let end = i + candidate.units.len();
-            end <= chars.len() && boundary_ok(&chars, i, end) && lowered[i..end] == candidate.units[..]
+            end <= chars.len()
+                && boundary_ok(&chars, i, end)
+                && lowered[i..end] == candidate.units[..]
         });
         if let Some(candidate) = matched {
             out.push_str(candidate.canonical);
@@ -79,7 +84,11 @@ pub fn stt_terms(settings: &TerminologySettings, limit: usize) -> Vec<String> {
     if !settings.enabled || !settings.send_to_stt || limit == 0 {
         return Vec::new();
     }
-    let mut entries: Vec<_> = settings.entries.iter().filter(|entry| entry.enabled && entry.provider_hint).collect();
+    let mut entries: Vec<_> = settings
+        .entries
+        .iter()
+        .filter(|entry| entry.enabled && entry.provider_hint)
+        .collect();
     entries.sort_by(|a, b| b.priority.cmp(&a.priority));
     let mut seen = HashSet::new();
     let mut result = Vec::new();
@@ -105,7 +114,11 @@ mod tests {
     use crate::settings::{TerminologyEntry, TerminologySettings};
 
     fn dictionary(entries: Vec<TerminologyEntry>) -> TerminologySettings {
-        TerminologySettings { enabled: true, send_to_stt: true, entries }
+        TerminologySettings {
+            enabled: true,
+            send_to_stt: true,
+            entries,
+        }
     }
 
     fn entry(canonical: &str, aliases: &[&str]) -> TerminologyEntry {
@@ -121,19 +134,31 @@ mod tests {
 
     #[test]
     fn maps_a_spoken_part_code_to_exact_canonical_text() {
-        let settings = dictionary(vec![entry("7PK2604", &["7 pk 2604", "bảy pê ka hai sáu không bốn"])]);
-        assert_eq!(apply("lấy dây 7 pk 2604 giúp tôi", &settings), "lấy dây 7PK2604 giúp tôi");
+        let settings = dictionary(vec![entry(
+            "7PK2604",
+            &["7 pk 2604", "bảy pê ka hai sáu không bốn"],
+        )]);
+        assert_eq!(
+            apply("lấy dây 7 pk 2604 giúp tôi", &settings),
+            "lấy dây 7PK2604 giúp tôi"
+        );
     }
 
     #[test]
     fn maps_common_automotive_domain_aliases() {
-        let settings = dictionary(vec![entry("CUROA", &["cu roa", "cua roa"]), entry("PHỚT", &["phốt"])]);
+        let settings = dictionary(vec![
+            entry("CUROA", &["cu roa", "cua roa"]),
+            entry("PHỚT", &["phốt"]),
+        ]);
         assert_eq!(apply("lấy cu roa và phốt", &settings), "lấy CUROA và PHỚT");
     }
 
     #[test]
     fn longest_alias_wins() {
-        let settings = dictionary(vec![entry("PK", &["pê ka"]), entry("7PK2604", &["bảy pê ka hai sáu không bốn"])]);
+        let settings = dictionary(vec![
+            entry("PK", &["pê ka"]),
+            entry("7PK2604", &["bảy pê ka hai sáu không bốn"]),
+        ]);
         assert_eq!(apply("bảy pê ka hai sáu không bốn", &settings), "7PK2604");
     }
 
@@ -165,7 +190,10 @@ mod tests {
         seed.priority = 800;
         let user = entry("USER", &[]);
         let duplicate = entry("user", &[]);
-        assert_eq!(stt_terms(&dictionary(vec![seed, duplicate, user]), 2), vec!["user", "SEED"]);
+        assert_eq!(
+            stt_terms(&dictionary(vec![seed, duplicate, user]), 2),
+            vec!["user", "SEED"]
+        );
     }
 
     #[test]

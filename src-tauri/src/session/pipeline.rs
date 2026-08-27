@@ -6,11 +6,11 @@
 //! even when delivery fails, so nothing is ever lost silently.
 
 use crate::audio::feedback;
+use crate::errors::{ErrorKind, ErrorPayload};
 use crate::history::{self, HistoryEntry};
 use crate::overlay;
 use crate::refine::{self, RefineRequest};
-use crate::settings::{secrets, defaults, OutputAction};
-use crate::errors::{ErrorKind, ErrorPayload};
+use crate::settings::{defaults, secrets, OutputAction};
 use crate::state::{self, emit_error, events, Phase};
 use crate::{audio, inject, terminology};
 use chrono::Utc;
@@ -139,7 +139,11 @@ async fn refine_or_fall_back(
         .filter(|p| p.needs_key)
         .and_then(|p| secrets::get_key(p.secret_key));
 
-    if defaults::preset(&llm.preset).map(|p| p.needs_key).unwrap_or(true) && api_key.is_none() {
+    if defaults::preset(&llm.preset)
+        .map(|p| p.needs_key)
+        .unwrap_or(true)
+        && api_key.is_none()
+    {
         emit_error(
             app,
             ErrorPayload::with_detail(ErrorKind::NoLlmKey, llm.preset.clone()),

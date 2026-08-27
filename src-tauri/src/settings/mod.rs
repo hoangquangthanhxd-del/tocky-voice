@@ -20,6 +20,7 @@ pub enum SttProviderKind {
     Soniox,
     Deepgram,
     AssemblyAi,
+    Gemini,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,7 +32,7 @@ pub struct SttSettings {
     pub deepgram_model: String,
     /// Primary language code sent to providers that want a single language (Deepgram).
     pub language: String,
-    /// Hint list for providers that accept several (Soniox). Order matters — most likely first.
+    /// Hint list for providers that accept several (Soniox/Gemini). Order matters — most likely first.
     pub language_hints: Vec<String>,
 }
 
@@ -138,7 +139,11 @@ pub struct TerminologySettings {
 
 impl Default for TerminologySettings {
     fn default() -> Self {
-        Self { enabled: true, send_to_stt: true, entries: Vec::new() }
+        Self {
+            enabled: true,
+            send_to_stt: true,
+            entries: Vec::new(),
+        }
     }
 }
 
@@ -192,7 +197,7 @@ fn default_user_term_priority() -> i32 {
 
 /// Every credential name the app can store, for backend migration.
 pub fn all_secret_accounts() -> Vec<&'static str> {
-    let mut accounts = vec!["soniox", "deepgram", "assemblyai"];
+    let mut accounts = vec!["soniox", "deepgram", "assemblyai", "gemini"];
     accounts.extend(defaults::llm_presets().iter().map(|p| p.secret_key));
     accounts
 }
@@ -211,7 +216,9 @@ impl AppSettings {
 
     /// LLM config for a mode, falling back to the global one.
     pub fn llm_for(&self, mode: &Mode) -> LlmSettings {
-        mode.llm_override.clone().unwrap_or_else(|| self.llm.clone())
+        mode.llm_override
+            .clone()
+            .unwrap_or_else(|| self.llm.clone())
     }
 }
 
@@ -335,7 +342,10 @@ mod tests {
 
         restore_missing_dictation_hotkey(&mut settings);
 
-        assert_eq!(settings.hotkeys.toggle.as_deref(), Some("Control+Shift+Space"));
+        assert_eq!(
+            settings.hotkeys.toggle.as_deref(),
+            Some("Control+Shift+Space")
+        );
     }
 }
 

@@ -19,9 +19,9 @@ mod macos_accessibility;
 mod overlay;
 mod private_file;
 mod session;
-mod tray;
 mod state;
 mod terminology;
+mod tray;
 
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
@@ -191,4 +191,3 @@ pub fn show_settings_window(app: &tauri::AppHandle) {
     let _ = window.show();
     let _ = window.set_focus();
 }
-

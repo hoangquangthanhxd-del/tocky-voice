@@ -74,7 +74,11 @@ pub async fn complete(
         .pointer("/usage/completion_tokens_details/reasoning_tokens")
         .and_then(|t| t.as_u64())
         .unwrap_or(0);
-    if spent_reasoning > 0 || payload.pointer("/choices/0/message/reasoning_content").is_some() {
+    if spent_reasoning > 0
+        || payload
+            .pointer("/choices/0/message/reasoning_content")
+            .is_some()
+    {
         return Err(anyhow!(
             "{} is a reasoning model and used the whole {} token budget thinking, \
              leaving no answer. Raise Max tokens, or pick a non-reasoning model for cleanup.",
@@ -83,5 +87,7 @@ pub async fn complete(
         ));
     }
 
-    Err(anyhow!("chat completions response contained no message content"))
+    Err(anyhow!(
+        "chat completions response contained no message content"
+    ))
 }

@@ -52,7 +52,11 @@ impl Deepgram {
 
 impl WsProtocol for Deepgram {
     fn request(&self) -> Result<Request<()>> {
-        request_with_header(&self.url(), "authorization", &format!("Token {}", self.api_key))
+        request_with_header(
+            &self.url(),
+            "authorization",
+            &format!("Token {}", self.api_key),
+        )
     }
 
     fn init_message(&self) -> Option<Message> {

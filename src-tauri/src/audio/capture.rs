@@ -62,7 +62,11 @@ pub fn describe_input_devices() -> Vec<String> {
     devices
         .map(|device| {
             let name = device.name().unwrap_or_else(|_| "<unnamed>".into());
-            let marker = if name == default { " (system default)" } else { "" };
+            let marker = if name == default {
+                " (system default)"
+            } else {
+                ""
+            };
             match device.default_input_config() {
                 Ok(config) => {
                     let supported: Vec<String> = device

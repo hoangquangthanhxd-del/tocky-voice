@@ -122,7 +122,7 @@ const en = {
     languageHint: "Deepgram takes exactly one language.",
     hints: "Language hints",
     hintsHint:
-      "Soniox accepts several at once — this is what makes a sentence that mixes Vietnamese and English work. Click to toggle; the number shows priority.",
+      "Soniox and Gemini accept several at once — useful when a sentence mixes Vietnamese and English. Click to toggle; the number shows priority.",
     aiSection: "AI cleanup",
     provider: "Provider",
     providerHint: "Anything OpenAI-compatible works, including a local Ollama.",
@@ -156,7 +156,7 @@ const en = {
     enabled: "Use terminology dictionary",
     enabledHint: "Turns deterministic alias mapping on or off without deleting any entries.",
     sendToStt: "Send vocabulary to speech recognition",
-    sendToSttHint: "Prioritises selected canonical terms in Soniox or Deepgram before local mapping runs.",
+    sendToSttHint: "Prioritises selected canonical terms in Soniox, Deepgram or Gemini before local mapping runs.",
     total: "entries",
     active: "enabled",
     custom: "custom",
@@ -250,7 +250,7 @@ const en = {
     coursesLink: "See the courses",
     beforeSection: "Before you hand this to someone",
     privacy:
-      "Your voice is streamed to the speech provider, and the transcript is then sent to the AI provider — both under the account whose key you entered. Anything you dictate reaches those two companies. Keys are stored in a file only your user account can read, or in the OS keychain if you switch that on in Providers. Credit amounts above are what the vendors advertise and can change without notice — check the signup page. The app also checks GitHub for a newer version once per launch, which sends your current app version and IP address; turn this off in Settings if you'd rather not.",
+      "Your voice is streamed to the speech provider, and the transcript is then sent to the AI provider — both under the account whose key you entered. Anything you dictate reaches those two companies. Keys are stored in a file only your user account can read, or in the OS keychain if you switch that on in Providers. Free-tier and credit information above is what the vendors advertise and can change without notice — check the signup page. The app also checks GitHub for a newer version once per launch, which sends your current app version and IP address; turn this off in Settings if you'd rather not.",
   },
 
   update: {
@@ -318,7 +318,7 @@ const en = {
     speechBody:
       "Your voice is transcribed by an online service, so you need a free key from one of these. Pick one, get the key, paste it below.",
     getFreeKey: "Get a free key",
-    keyStep1: "Open {provider} and sign up — no card needed for the free credit.",
+    keyStep1: "Open {provider} and sign up — use its free tier or trial where available.",
     keyStep2: "Copy the key it gives you and paste it here.",
     keySaved: "{provider} key saved.",
     keyChecking: "Checking the key with {provider}…",
@@ -371,9 +371,12 @@ const en = {
   stt: {
     best_vietnamese: "Best for Vietnamese",
     free_credit: "Free {amount}",
+    free_tier: "Free tier",
     paid: "Paid — ${price}/hour",
     soniox:
       "The most accurate when you mix Vietnamese and English in one sentence. Billed from the first minute, but the cheapest per hour.",
+    gemini:
+      "Gemini 3.5 Transcribe Live: free tier, 85+ languages, code-switching and custom vocabulary for domain terms.",
     deepgram:
       "The largest free credit — enough for hundreds of hours. Handles Vietnamese, but noticeably weaker than Soniox on sentences that mix in English.",
     assembly_ai:
@@ -480,7 +483,7 @@ const vi: Dictionary = {
     languageHint: "Deepgram chỉ nhận đúng một ngôn ngữ.",
     hints: "Gợi ý ngôn ngữ",
     hintsHint:
-      "Soniox nhận nhiều ngôn ngữ cùng lúc — đây là thứ giúp câu pha tiếng Việt lẫn tiếng Anh chạy đúng. Bấm để bật/tắt; số là thứ tự ưu tiên.",
+      "Soniox và Gemini nhận nhiều ngôn ngữ cùng lúc — hữu ích khi câu nói trộn tiếng Việt và tiếng Anh. Bấm để bật/tắt; số là thứ tự ưu tiên.",
     aiSection: "AI tinh chỉnh",
     provider: "Nhà cung cấp",
     providerHint: "Bất kỳ endpoint nào tương thích OpenAI đều dùng được, kể cả Ollama chạy máy nhà.",
@@ -514,7 +517,7 @@ const vi: Dictionary = {
     enabled: "Dùng từ điển chuyên ngành",
     enabledHint: "Bật/tắt map thuật ngữ mà không xóa dữ liệu đã lưu.",
     sendToStt: "Gửi từ chuẩn cho STT",
-    sendToSttHint: "Ưu tiên các thuật ngữ đã chọn trong Soniox hoặc Deepgram trước khi map lại tại máy.",
+    sendToSttHint: "Ưu tiên các từ chuẩn đã chọn trong Soniox, Deepgram hoặc Gemini trước khi map cục bộ.",
     total: "mục",
     active: "đang bật",
     custom: "tự thêm",
@@ -608,7 +611,7 @@ const vi: Dictionary = {
     coursesLink: "Xem các khoá học",
     beforeSection: "Trước khi đưa app này cho người khác",
     privacy:
-      "Giọng nói của anh được truyền tới nhà cung cấp nhận dạng, rồi văn bản được gửi tiếp tới nhà cung cấp AI — cả hai đều chạy trên tài khoản mà anh nhập key. Mọi thứ anh đọc đều tới tay hai công ty đó. Key lưu trong file chỉ tài khoản của anh đọc được, hoặc trong keychain hệ thống nếu anh bật ở tab Nhà cung cấp. Các con số credit ở trên là do hãng quảng cáo và có thể đổi bất cứ lúc nào — hãy kiểm tra lại ở trang đăng ký. App cũng tự kiểm tra bản mới trên GitHub mỗi lần mở, việc này gửi đi phiên bản app hiện tại và địa chỉ IP; tắt được ở mục Cài đặt nếu anh không muốn.",
+      "Giọng nói của anh được truyền tới nhà cung cấp nhận dạng, rồi văn bản được gửi tiếp tới nhà cung cấp AI — cả hai đều chạy trên tài khoản mà anh nhập key. Mọi thứ anh đọc đều tới tay hai công ty đó. Key lưu trong file chỉ tài khoản của anh đọc được, hoặc trong keychain hệ thống nếu anh bật ở tab Nhà cung cấp. Thông tin free tier và credit ở trên là do hãng công bố và có thể đổi bất cứ lúc nào — hãy kiểm tra lại ở trang đăng ký. App cũng tự kiểm tra bản mới trên GitHub mỗi lần mở, việc này gửi đi phiên bản app hiện tại và địa chỉ IP; tắt được ở mục Cài đặt nếu anh không muốn.",
   },
 
   update: {
@@ -672,7 +675,7 @@ const vi: Dictionary = {
     speechBody:
       "Giọng của bạn được chuyển thành chữ bởi một dịch vụ online, nên bạn cần một key miễn phí. Chọn một nhà cung cấp, lấy key, dán vào ô bên dưới.",
     getFreeKey: "Lấy key miễn phí",
-    keyStep1: "Mở {provider} và đăng ký — không cần thẻ để nhận credit miễn phí.",
+    keyStep1: "Mở {provider} và đăng ký — dùng free tier hoặc trial nếu nhà cung cấp có hỗ trợ.",
     keyStep2: "Copy key họ cấp rồi dán vào đây.",
     keySaved: "Đã lưu key {provider}.",
     keyChecking: "Đang kiểm tra key với {provider}…",
@@ -725,9 +728,12 @@ const vi: Dictionary = {
   stt: {
     best_vietnamese: "Chuẩn tiếng Việt",
     free_credit: "Miễn phí {amount}",
+    free_tier: "Free tier",
     paid: "Trả phí — ${price}/giờ",
     soniox:
       "Nghe chuẩn nhất khi bạn nói tiếng Việt lẫn tiếng Anh trong cùng một câu. Tính tiền ngay từ phút đầu, nhưng lại rẻ nhất theo giờ.",
+    gemini:
+      "Gemini 3.5 Transcribe Live: có free tier, hỗ trợ hơn 85 ngôn ngữ, trộn ngôn ngữ và custom vocabulary cho thuật ngữ chuyên ngành.",
     deepgram:
       "Credit miễn phí lớn nhất — đủ dùng hàng trăm giờ. Nghe tiếng Việt được, nhưng câu trộn tiếng Anh thì kém Soniox rõ rệt.",
     assembly_ai:

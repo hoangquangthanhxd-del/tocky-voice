@@ -46,7 +46,10 @@ pub fn save_settings(
 }
 
 #[tauri::command]
-pub fn reset_settings(app: AppHandle, state: tauri::State<AppState>) -> Result<AppSettings, String> {
+pub fn reset_settings(
+    app: AppHandle,
+    state: tauri::State<AppState>,
+) -> Result<AppSettings, String> {
     let fresh = defaults::default_settings();
     settings::save(&app, &fresh).map_err(to_err)?;
     *state.settings.lock().expect("settings lock") = fresh.clone();
@@ -121,7 +124,7 @@ pub fn delete_api_key(account: String) -> Result<(), String> {
 #[tauri::command]
 pub fn key_status() -> HashMap<String, bool> {
     let mut status = HashMap::new();
-    for account in ["soniox", "deepgram", "assemblyai"] {
+    for account in ["soniox", "deepgram", "assemblyai", "gemini"] {
         status.insert(account.to_string(), secrets::has_key(account));
     }
     for preset in defaults::llm_presets() {
@@ -297,7 +300,9 @@ pub async fn list_models(app: AppHandle) -> Result<Vec<String>, String> {
         .filter(|p| p.needs_key)
         .and_then(|p| secrets::get_key(p.secret_key));
 
-    crate::refine::list_models(&llm, api_key).await.map_err(to_err)
+    crate::refine::list_models(&llm, api_key)
+        .await
+        .map_err(to_err)
 }
 
 #[tauri::command]
@@ -316,7 +321,11 @@ fn apply_autostart(app: &AppHandle, enabled: bool) {
     // keystroke in the UI, and on Windows `disable()` on an entry that was never
     // created fails with "the system cannot find the file specified" — a warning per
     // save, about nothing, drowning out the lines worth reading.
-    if manager.is_enabled().map(|now| now == enabled).unwrap_or(false) {
+    if manager
+        .is_enabled()
+        .map(|now| now == enabled)
+        .unwrap_or(false)
+    {
         return;
     }
 

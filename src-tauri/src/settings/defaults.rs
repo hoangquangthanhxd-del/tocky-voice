@@ -59,7 +59,11 @@ pub fn llm_presets() -> &'static [LlmPreset] {
             wire: LlmWire::OpenAiCompatible,
             base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
             default_model: "gemini-2.5-flash",
-            models: &["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
+            models: &[
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
+                "gemini-2.5-pro",
+            ],
             secret_key: "gemini",
             signup_url: "https://aistudio.google.com/apikey",
             needs_key: true,

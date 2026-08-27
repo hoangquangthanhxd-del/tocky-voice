@@ -119,6 +119,7 @@ pub fn stt_account(provider: &super::SttProviderKind) -> &'static str {
         super::SttProviderKind::Soniox => "soniox",
         super::SttProviderKind::Deepgram => "deepgram",
         super::SttProviderKind::AssemblyAi => "assemblyai",
+        super::SttProviderKind::Gemini => "gemini",
     }
 }
 
