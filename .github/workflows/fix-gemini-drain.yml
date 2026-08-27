@@ -1,0 +1,77 @@
+name: Apply Gemini drain completion fix
+
+on:
+  push:
+    branches: [feature/automotive-terminology]
+    paths:
+      - ".github/workflows/fix-gemini-drain.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: feature/automotive-terminology
+
+      - name: Patch Gemini completion handling
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace_exact(
+              'src-tauri/src/stt/mod.rs',
+              '''    /// Frame that tells the vendor no more audio is coming.\n    fn finish_message(&self) -> Message;\n    /// Turn one inbound text frame into zero or more transcript events.''',
+              '''    /// Frame that tells the vendor no more audio is coming.\n    fn finish_message(&self) -> Message;\n    /// True when a post-audio server frame means the provider has flushed the current\n    /// utterance. Most providers close their socket; Gemini Live keeps the session open\n    /// and instead marks the turn complete.\n    fn drain_complete(&self, _text: &str) -> bool {\n        false\n    }\n    /// Turn one inbound text frame into zero or more transcript events.''',
+          )
+
+          replace_exact(
+              'src-tauri/src/stt/mod.rs',
+              '''            Ok(Message::Text(text)) => {\n                for event in protocol.parse(&text)? {\n                    if let SttEvent::Final(ref t) = event {\n                        tail.push(t.clone());\n                    }\n                    let _ = events.send(event);\n                }\n            }''',
+              '''            Ok(Message::Text(text)) => {\n                let complete = protocol.drain_complete(&text);\n                for event in protocol.parse(&text)? {\n                    if let SttEvent::Final(ref t) = event {\n                        tail.push(t.clone());\n                    }\n                    let _ = events.send(event);\n                }\n                if complete {\n                    break;\n                }\n            }''',
+          )
+
+          replace_exact(
+              'src-tauri/src/stt/gemini.rs',
+              '''    fn finish_message(&self) -> Message {\n        Message::Text(json!({ "realtimeInput": { "audioStreamEnd": true } }).to_string())\n    }\n\n    fn parse(&mut self, text: &str) -> Result<Vec<SttEvent>> {''',
+              '''    fn finish_message(&self) -> Message {\n        Message::Text(json!({ "realtimeInput": { "audioStreamEnd": true } }).to_string())\n    }\n\n    fn drain_complete(&self, text: &str) -> bool {\n        serde_json::from_str::<Value>(text)\n            .ok()\n            .and_then(|value| {\n                value\n                    .get("serverContent")?\n                    .get("turnComplete")?\n                    .as_bool()\n            })\n            .unwrap_or(false)\n    }\n\n    fn parse(&mut self, text: &str) -> Result<Vec<SttEvent>> {''',
+          )
+
+          replace_exact(
+              'src-tauri/src/stt/gemini.rs',
+              '''    #[test]\n    fn provider_error_is_not_swallowed() {''',
+              '''    #[test]\n    fn turn_complete_ends_drain_without_waiting_for_socket_close() {\n        let protocol = gemini();\n        assert!(protocol.drain_complete(\n            r#"{\"serverContent\":{\"turnComplete\":true}}"#\n        ));\n        assert!(!protocol.drain_complete(\n            r#"{\"serverContent\":{\"turnComplete\":false}}"#\n        ));\n    }\n\n    #[test]\n    fn provider_error_is_not_swallowed() {''',
+          )
+          PY
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: rustfmt
+
+      - name: Format Rust
+        working-directory: src-tauri
+        run: cargo fmt
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/src/stt/mod.rs src-tauri/src/stt/gemini.rs
+          git commit -m "fix: finish Gemini transcription on turn complete"
+          git push origin HEAD:feature/automotive-terminology
