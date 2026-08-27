@@ -29,6 +29,11 @@ const DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 /// take records with no partials and only reveals itself as a hang at stop time.
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// Some providers have an application-level setup handshake after WebSocket connect.
+/// Audio sent before that acknowledgement is not guaranteed to belong to the configured
+/// session, so keep it buffered locally until the provider says setup is complete.
+const SETUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
+
 /// How long any single write to the socket may take.
 ///
 /// Sends stall rather than fail when the far end stops reading and the kernel buffer
@@ -59,6 +64,15 @@ pub trait WsProtocol: Send {
     fn request(&self) -> Result<Request<()>>;
     /// Configuration frame sent before any audio, if the vendor needs one.
     fn init_message(&self) -> Option<Message>;
+    /// Whether this provider requires a server acknowledgement after the config frame
+    /// before the first audio frame may be sent.
+    fn requires_setup_ack(&self) -> bool {
+        false
+    }
+    /// True when an inbound frame is that setup acknowledgement.
+    fn is_setup_ack(&self, _text: &str) -> bool {
+        false
+    }
     /// Encodes one chunk of 16 kHz mono PCM16 for this vendor. Most providers take
     /// binary frames directly; Gemini wraps the bytes as base64 inside `realtimeInput`.
     fn audio_message(&self, bytes: Vec<u8>) -> Message {
@@ -123,6 +137,9 @@ pub async fn run_stream(
 
     if let Some(init) = protocol.init_message() {
         writer.send(init).await.context("sending stt config")?;
+    }
+    if protocol.requires_setup_ack() {
+        wait_for_setup_ack(&mut reader, &mut protocol).await?;
     }
 
     let mut transcript = String::new();
@@ -329,6 +346,39 @@ mod send_tests {
 type WsReader = futures_util::stream::SplitStream<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 >;
+
+/// Waits for an application-level setup acknowledgement before releasing microphone
+/// audio to the socket. Gemini Live emits `setupComplete`; other providers skip this
+/// path entirely. Provider error frames are still parsed here so a bad key/model is
+/// reported immediately instead of looking like a setup timeout.
+async fn wait_for_setup_ack(reader: &mut WsReader, protocol: &mut Box<dyn WsProtocol>) -> Result<()> {
+    let wait = async {
+        while let Some(msg) = reader.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    // Parse first so explicit provider errors win over a generic timeout.
+                    let _ = protocol.parse(&text)?;
+                    if protocol.is_setup_ack(&text) {
+                        return Ok(());
+                    }
+                }
+                Ok(Message::Close(frame)) => return Err(anyhow!("{}", close_reason(frame.as_ref()))),
+                Ok(_) => {}
+                Err(e) => return Err(anyhow!("speech provider setup error: {e}")),
+            }
+        }
+        Err(anyhow!("the provider closed before setup completed"))
+    };
+
+    tokio::time::timeout(SETUP_TIMEOUT, wait)
+        .await
+        .map_err(|_| {
+            anyhow!(
+                "speech provider setup did not complete within {}s",
+                SETUP_TIMEOUT.as_secs()
+            )
+        })?
+}
 
 /// Reads until the provider closes the socket, collecting any remaining final text.
 async fn drain(
