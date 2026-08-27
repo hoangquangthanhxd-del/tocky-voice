@@ -1,66 +1,90 @@
-//! Global hotkey registration and dispatch.
-//!
-//! A failed rebind never removes the user's working bindings: we clear the previous
-//! set only after validating all of the new strings. Individual OS registration
-//! failures are logged and the remaining shortcuts still get installed.
+//! Global hotkey binding. Every binding is a regular accelerator handled by the
+//! global-shortcut plugin, and every one of them acts on key-down.
 
 use crate::session;
-use crate::settings::{AppSettings, HotkeyAction};
+use crate::settings::AppSettings;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HotkeyAction {
+    /// Press once to start, again to stop and transcribe.
+    Toggle,
+    /// Discard the current take.
+    Cancel,
+    NextMode,
+    /// Switch to a mode and immediately start recording in it.
+    SelectMode(String),
+}
+
 #[derive(Default)]
 pub struct HotkeyRegistry {
-    actions: Mutex<HashMap<Shortcut, HotkeyAction>>,
+    bindings: Mutex<HashMap<Shortcut, HotkeyAction>>,
 }
 
 impl HotkeyRegistry {
-    fn action_for(&self, shortcut: &Shortcut) -> Option<HotkeyAction> {
-        self.actions.lock().ok()?.get(shortcut).cloned()
+    pub fn action_for(&self, shortcut: &Shortcut) -> Option<HotkeyAction> {
+        self.bindings.lock().ok()?.get(shortcut).cloned()
     }
 }
 
-/// Replaces all registered shortcuts with the settings snapshot.
-pub fn apply(app: &AppHandle, settings: &AppSettings) {
+/// Releases every binding. Used while the settings UI is recording a new shortcut —
+/// otherwise pressing the combination you want to assign would fire the action instead
+/// of being captured.
+pub fn suspend(app: &AppHandle) {
     let registry = app.state::<HotkeyRegistry>();
-    let mut parsed = Vec::new();
-
-    for binding in &settings.hotkeys {
-        let shortcut = match binding.shortcut.parse::<Shortcut>() {
-            Ok(value) => value,
-            Err(e) => {
-                log::warn!(
-                    "invalid shortcut {:?} for {:?}: {e}",
-                    binding.shortcut,
-                    binding.action
-                );
-                continue;
-            }
-        };
-        parsed.push((shortcut, binding.action.clone()));
+    let _ = app.global_shortcut().unregister_all();
+    if let Ok(mut bindings) = registry.bindings.lock() {
+        bindings.clear();
     }
+    log::debug!("hotkeys suspended for recording");
+}
 
-    if let Err(e) = app.global_shortcut().unregister_all() {
-        log::warn!("could not clear old global shortcuts: {e}");
+/// Rebinds every hotkey to match `settings`. Safe to call repeatedly — existing
+/// bindings are torn down first, so saving settings re-applies them immediately.
+pub fn apply(app: &AppHandle, settings: &AppSettings) {
+    suspend(app);
+    let registry = app.state::<HotkeyRegistry>();
+
+    let mut wanted: Vec<(String, HotkeyAction)> = Vec::new();
+    if let Some(acc) = settings.hotkeys.toggle.clone() {
+        wanted.push((acc, HotkeyAction::Toggle));
     }
-
-    let mut active = HashMap::new();
-    for (shortcut, action) in parsed {
-        match app.global_shortcut().register(shortcut) {
-            Ok(()) => {
-                active.insert(shortcut, action);
-            }
-            Err(e) => log::warn!("could not register {shortcut:?}: {e}"),
+    if let Some(acc) = settings.hotkeys.cancel.clone() {
+        wanted.push((acc, HotkeyAction::Cancel));
+    }
+    if let Some(acc) = settings.hotkeys.next_mode.clone() {
+        wanted.push((acc, HotkeyAction::NextMode));
+    }
+    for mode in &settings.modes {
+        if let Some(acc) = mode.hotkey.clone() {
+            wanted.push((acc, HotkeyAction::SelectMode(mode.id.clone())));
         }
     }
 
-    if let Ok(mut actions) = registry.actions.lock() {
-        *actions = active;
+    for (accelerator, action) in wanted {
+        let Ok(shortcut) = Shortcut::from_str(&accelerator) else {
+            log::warn!("ignoring unparseable hotkey {accelerator:?}");
+            continue;
+        };
+        if let Err(e) = app.global_shortcut().register(shortcut) {
+            log::warn!(
+                "could not register hotkey {accelerator:?} ({action:?}) — another app \
+                 probably owns it: {e}"
+            );
+            continue;
+        }
+        log::info!("hotkey registered: {accelerator} -> {action:?}");
+        if let Ok(mut bindings) = registry.bindings.lock() {
+            bindings.insert(shortcut, action);
+        }
     }
 }
 
+/// Global-shortcut plugin callback.
 pub fn on_shortcut(app: &AppHandle, shortcut: &Shortcut, state: ShortcutState) {
     let Some(action) = app.state::<HotkeyRegistry>().action_for(shortcut) else {
         // Logged rather than ignored: "the hotkey does nothing" is the single most
@@ -88,14 +112,29 @@ mod tests {
     use super::*;
     use crate::settings::defaults;
 
+    /// Every factory binding has to survive `Shortcut::from_str`, or `apply` skips it
+    /// with a log line nobody reads and the app ships with a hotkey that never fires.
     #[test]
-    fn default_shortcuts_parse() {
-        for binding in defaults::default_settings().hotkeys {
+    fn every_default_accelerator_parses() {
+        let hotkeys = defaults::default_hotkeys();
+        let accelerators: Vec<String> = [&hotkeys.toggle, &hotkeys.cancel, &hotkeys.next_mode]
+            .into_iter()
+            .flatten()
+            .cloned()
+            .collect();
+        assert!(!accelerators.is_empty());
+        for accelerator in accelerators {
             assert!(
-                binding.shortcut.parse::<Shortcut>().is_ok(),
-                "{}",
-                binding.shortcut
+                Shortcut::from_str(&accelerator).is_ok(),
+                "default hotkey {accelerator:?} does not parse"
             );
         }
+    }
+
+    /// Dictation has exactly one binding now, so a factory default that is missing
+    /// leaves a fresh install with no way to start a take except the tray menu.
+    #[test]
+    fn a_fresh_install_has_a_dictation_hotkey() {
+        assert!(defaults::default_hotkeys().toggle.is_some());
     }
 }
