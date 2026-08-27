@@ -23,12 +23,13 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-deep-link = "2"
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # async runtime + networking
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
 futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
@@ -57,6 +58,12 @@ urlencoding = "2"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 sys-locale = "0.3"
+
+# Windows/Linux deliver custom-scheme deep links by launching a second process. The
+# single-instance plugin forwards them into the already-running app; its deep-link
+# feature integrates with tauri-plugin-deep-link before other plugins run.
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 # Pasting needs the Accessibility permission checked through ApplicationServices, and
 # it has to hand focus back to whichever app the user was typing in.
