@@ -15,10 +15,10 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
+use tokio_tungstenite::accept_hdr_async;
 use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
 use tokio_tungstenite::tungstenite::http::StatusCode;
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::accept_hdr_async;
 use uuid::Uuid;
 
 pub const BRIDGE_ADDR: &str = "127.0.0.1:17891";
@@ -28,6 +28,7 @@ const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 const MAX_CONTEXT_BYTES: usize = 4 * 1024;
 const RATE_WINDOW: Duration = Duration::from_secs(10);
 const MAX_MESSAGES_PER_WINDOW: u32 = 40;
+const PREPARE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Exact origins accepted by the first vertical slice. Keep this deliberately narrow;
 /// production origins can be added through a later managed setting instead of using a
@@ -199,15 +200,8 @@ async fn handle_connection(app: AppHandle, stream: TcpStream) -> anyhow::Result<
                 let _ = out_tx.send(Message::Pong(payload));
             }
             Message::Close(_) => break,
-            _ if message.is_text() => {
-                let text = match message.to_text() {
-                    Ok(text) => text,
-                    Err(_) => {
-                        send_protocol_error(&out_tx, None, "INVALID_TEXT");
-                        continue;
-                    }
-                };
-                let command: ClientMessage = match serde_json::from_str(text) {
+            Message::Text(text) => {
+                let command: ClientMessage = match serde_json::from_str(text.as_ref()) {
                     Ok(value) => value,
                     Err(_) => {
                         send_protocol_error(&out_tx, None, "INVALID_MESSAGE");
@@ -269,11 +263,11 @@ fn handle_command(
                 send_protocol_error(tx, Some(&request_id), "BRIDGE_UNAVAILABLE");
                 return;
             };
-            if slot
-                .as_ref()
-                .map(|request| request.client_id != client_id)
-                .unwrap_or(false)
-            {
+            // A request remains owned while STT is finalizing, even though Recorder no
+            // longer reports an active capture. Never let the same tab replace that slot:
+            // doing so would orphan the old result and could make it fall through to the
+            // normal OS paste path.
+            if slot.is_some() {
                 send_protocol_error(tx, Some(&request_id), "BUSY");
                 return;
             }
@@ -284,6 +278,8 @@ fn handle_command(
                 phase: RequestPhase::Prepared,
                 tx: tx.clone(),
             });
+            drop(slot);
+
             send_json(
                 tx,
                 json!({
@@ -293,6 +289,16 @@ fn handle_command(
                     "origin": origin,
                 }),
             );
+
+            // A browser that prepares but never follows with the deep link must not
+            // reserve the single bridge slot forever. Recording/finalizing requests are
+            // deliberately not expired here; their lifecycle is owned by session.rs.
+            let timeout_app = app.clone();
+            let timeout_request_id = request_id.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(PREPARE_TIMEOUT).await;
+                expire_prepared_request(&timeout_app, client_id, &timeout_request_id);
+            });
         }
         ClientMessage::Stop { request_id } => {
             if owns_recording_request(app, client_id, &request_id) {
@@ -472,6 +478,31 @@ fn take_recording_request(app: &AppHandle) -> Option<BridgeRequest> {
 
 fn take_any_request(app: &AppHandle) -> Option<BridgeRequest> {
     app.state::<WebBridge>().request.lock().ok()?.take()
+}
+
+fn expire_prepared_request(app: &AppHandle, client_id: Uuid, request_id: &str) {
+    let expired = {
+        let bridge = app.state::<WebBridge>();
+        let Ok(mut slot) = bridge.request.lock() else {
+            return;
+        };
+        if slot
+            .as_ref()
+            .map(|request| {
+                request.client_id == client_id
+                    && request.request_id == request_id
+                    && request.phase == RequestPhase::Prepared
+            })
+            .unwrap_or(false)
+        {
+            slot.take()
+        } else {
+            None
+        }
+    };
+    if let Some(request) = expired {
+        send_protocol_error(&request.tx, Some(&request.request_id), "PREPARE_TIMEOUT");
+    }
 }
 
 fn clear_matching_request(app: &AppHandle, request_id: &str) {
