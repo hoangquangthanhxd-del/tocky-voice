@@ -368,8 +368,11 @@ pub fn handle_deep_link(app: &AppHandle, raw_url: &str) -> bool {
         );
         true
     } else {
-        clear_matching_request(app, &request_id);
-        send_protocol_error(&tx, Some(&request_id), "START_FAILED");
+        // If cancel/disconnect already consumed the bridge request while start was
+        // pending, it owns the terminal event. Avoid a second START_FAILED message.
+        if clear_matching_request(app, &request_id) {
+            send_protocol_error(&tx, Some(&request_id), "START_FAILED");
+        }
         false
     }
 }
@@ -504,10 +507,10 @@ fn expire_prepared_request(app: &AppHandle, client_id: Uuid, request_id: &str) {
     }
 }
 
-fn clear_matching_request(app: &AppHandle, request_id: &str) {
+fn clear_matching_request(app: &AppHandle, request_id: &str) -> bool {
     let bridge = app.state::<WebBridge>();
     let Ok(mut slot) = bridge.request.lock() else {
-        return;
+        return false;
     };
     if slot
         .as_ref()
@@ -515,6 +518,9 @@ fn clear_matching_request(app: &AppHandle, request_id: &str) {
         .unwrap_or(false)
     {
         slot.take();
+        true
+    } else {
+        false
     }
 }
 

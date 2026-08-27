@@ -59,6 +59,7 @@ pub struct Recorder {
     /// Atomic reservation for synchronous setup before `active` can hold the fully
     /// constructed take. Two entry points must never open mic/provider concurrently.
     starting: AtomicBool,
+    start_cancelled: AtomicBool,
     active: Mutex<Option<ActiveTake>>,
     /// Present while a stopped take is still waiting on the provider. Sending on it
     /// abandons that wait — the escape hatch from a socket that never answers.
@@ -91,6 +92,7 @@ impl Recorder {
         self.starting
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .ok()?;
+        self.start_cancelled.store(false, Ordering::Release);
         Some(StartReservation {
             flag: &self.starting,
         })
@@ -98,7 +100,7 @@ impl Recorder {
 }
 
 pub fn toggle(app: &AppHandle) {
-    if app.state::<Recorder>().is_recording() {
+    if app.state::<Recorder>().is_busy() {
         stop(app);
     } else {
         start(app, None);
@@ -194,6 +196,14 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) -> bool {
         stt_task.abort();
         return false;
     };
+    // A stop/cancel may arrive after the start reservation is taken but before the
+    // fully constructed take can be published. Check while holding `active` so there
+    // is no gap between honoring that cancellation and publishing the take.
+    if recorder.start_cancelled.swap(false, Ordering::AcqRel) {
+        capture.stop();
+        stt_task.abort();
+        return false;
+    }
     debug_assert!(
         slot.is_none(),
         "start reservation must prevent active overwrite"
@@ -261,13 +271,12 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) -> bool {
 
 /// Ends the take and hands the result to the transcript → refine → paste pipeline.
 pub fn stop(app: &AppHandle) {
-    let Some(mut take) = app
-        .state::<Recorder>()
-        .active
-        .lock()
-        .ok()
-        .and_then(|mut slot| slot.take())
-    else {
+    let recorder = app.state::<Recorder>();
+    let recording = recorder.active.lock().ok().and_then(|mut slot| slot.take());
+    let Some(mut take) = recording else {
+        if recorder.starting.load(Ordering::Acquire) {
+            recorder.start_cancelled.store(true, Ordering::Release);
+        }
         return;
     };
 
@@ -380,6 +389,12 @@ pub fn cancel(app: &AppHandle) {
         take.audio_tx.take();
         take.stt_task.abort();
         abandon(app, &take.mode_id);
+        return;
+    }
+
+    if recorder.starting.load(Ordering::Acquire) {
+        recorder.start_cancelled.store(true, Ordering::Release);
+        let _ = web_bridge::deliver_cancelled(app);
         return;
     }
 
