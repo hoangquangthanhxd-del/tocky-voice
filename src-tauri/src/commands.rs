@@ -268,7 +268,7 @@ pub async fn test_llm(app: AppHandle) -> Result<String, String> {
 /// settings UI writes through a debounce, so a provider the user picked a moment ago
 /// has not reached disk yet and reading the snapshot would test the previous one.
 #[tauri::command]
-pub async fn test_stt_key(stt: settings::SttSettings) -> Result<(), String> {
+pub async fn test_stt_key(app: AppHandle, stt: settings::SttSettings) -> Result<(), String> {
     let account = secrets::stt_account(&stt.provider);
     let Some(api_key) = secrets::get_key(account) else {
         return Err(format!("no key saved for {account}"));
@@ -280,7 +280,9 @@ pub async fn test_stt_key(stt: settings::SttSettings) -> Result<(), String> {
         crate::stt::gemini::validate_api_key(&api_key)
             .await
             .map_err(to_err)?;
-        return crate::stt::gemini::probe_live_setup(&stt, api_key)
+        let terminology = crate::state::settings_snapshot(&app).terminology;
+        let terms = crate::terminology::stt_terms(&terminology, 100);
+        return crate::stt::gemini::probe_live_setup(&stt, api_key, terms)
             .await
             .map_err(to_err);
     }

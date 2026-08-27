@@ -139,7 +139,7 @@ pub async fn run_stream(
         writer.send(init).await.context("sending stt config")?;
     }
     if protocol.requires_setup_ack() {
-        wait_for_setup_ack(&mut reader, &mut protocol).await?;
+        wait_for_setup_ack(&mut writer, &mut reader, &mut protocol).await?;
     }
 
     let mut transcript = String::new();
@@ -188,6 +188,27 @@ pub async fn run_stream(
                         let _ = events.send(event);
                     }
                 }
+                // Gemini normally uses text JSON, but a compliant WebSocket peer can
+                // send the same UTF-8 JSON in a binary frame. Parse it rather than
+                // silently discarding an error, setup response or transcript.
+                Some(Ok(Message::Binary(bytes))) => {
+                    log::debug!("speech provider RX binary: {} bytes", bytes.len());
+                    if let Ok(text) = std::str::from_utf8(&bytes) {
+                        for event in protocol.parse(text)? {
+                            if let SttEvent::Final(ref t) = event {
+                                append_segment(&mut transcript, t);
+                            }
+                            let _ = events.send(event);
+                        }
+                    }
+                }
+                Some(Ok(Message::Ping(payload))) => {
+                    log::debug!("speech provider RX ping: {} bytes", payload.len());
+                    send_bounded(&mut writer, Message::Pong(payload)).await?;
+                }
+                Some(Ok(Message::Pong(payload))) => {
+                    log::debug!("speech provider RX pong: {} bytes", payload.len());
+                }
                 // A close before the user has finished speaking is the provider ending
                 // the session on us, and its reason is the only clue about why.
                 Some(Ok(Message::Close(frame))) => {
@@ -203,14 +224,14 @@ pub async fn run_stream(
                     }
                     break;
                 }
-                Some(Ok(_)) => {}
+                Some(Ok(_)) => log::debug!("speech provider RX unhandled websocket frame"),
                 Some(Err(e)) => return Err(anyhow!("speech provider stream error: {e}")),
             },
         }
 
         // Once audio has stopped, give the provider a bounded window to flush.
         if audio_done {
-            match tokio::time::timeout(DRAIN_TIMEOUT, drain(&mut reader, &mut protocol, &events))
+            match tokio::time::timeout(DRAIN_TIMEOUT, drain(&mut writer, &mut reader, &mut protocol, &events))
                 .await
             {
                 Ok(Ok(tail)) => {
@@ -343,6 +364,10 @@ mod send_tests {
     }
 }
 
+type WsWriter = futures_util::stream::SplitSink<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    Message,
+>;
 type WsReader = futures_util::stream::SplitStream<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 >;
@@ -352,6 +377,7 @@ type WsReader = futures_util::stream::SplitStream<
 /// path entirely. Provider error frames are still parsed here so a bad key/model is
 /// reported immediately instead of looking like a setup timeout.
 async fn wait_for_setup_ack(
+    writer: &mut WsWriter,
     reader: &mut WsReader,
     protocol: &mut Box<dyn WsProtocol>,
 ) -> Result<()> {
@@ -365,10 +391,26 @@ async fn wait_for_setup_ack(
                         return Ok(());
                     }
                 }
+                Ok(Message::Binary(bytes)) => {
+                    log::debug!("speech provider setup RX binary: {} bytes", bytes.len());
+                    if let Ok(text) = std::str::from_utf8(&bytes) {
+                        let _ = protocol.parse(text)?;
+                        if protocol.is_setup_ack(text) {
+                            return Ok(());
+                        }
+                    }
+                }
+                Ok(Message::Ping(payload)) => {
+                    log::debug!("speech provider setup RX ping: {} bytes", payload.len());
+                    send_bounded(writer, Message::Pong(payload)).await?;
+                }
+                Ok(Message::Pong(payload)) => {
+                    log::debug!("speech provider setup RX pong: {} bytes", payload.len());
+                }
                 Ok(Message::Close(frame)) => {
                     return Err(anyhow!("{}", close_reason(frame.as_ref())))
                 }
-                Ok(_) => {}
+                Ok(_) => log::debug!("speech provider setup RX unhandled websocket frame"),
                 Err(e) => return Err(anyhow!("speech provider setup error: {e}")),
             }
         }
@@ -387,6 +429,7 @@ async fn wait_for_setup_ack(
 
 /// Reads until the provider closes the socket, collecting any remaining final text.
 async fn drain(
+    writer: &mut WsWriter,
     reader: &mut WsReader,
     protocol: &mut Box<dyn WsProtocol>,
     events: &UnboundedSender<SttEvent>,
@@ -406,8 +449,30 @@ async fn drain(
                     break;
                 }
             }
+            Ok(Message::Binary(bytes)) => {
+                log::debug!("speech provider drain RX binary: {} bytes", bytes.len());
+                if let Ok(text) = std::str::from_utf8(&bytes) {
+                    let complete = protocol.drain_complete(text);
+                    for event in protocol.parse(text)? {
+                        if let SttEvent::Final(ref t) = event {
+                            tail.push(t.clone());
+                        }
+                        let _ = events.send(event);
+                    }
+                    if complete {
+                        break;
+                    }
+                }
+            }
+            Ok(Message::Ping(payload)) => {
+                log::debug!("speech provider drain RX ping: {} bytes", payload.len());
+                send_bounded(writer, Message::Pong(payload)).await?;
+            }
+            Ok(Message::Pong(payload)) => {
+                log::debug!("speech provider drain RX pong: {} bytes", payload.len());
+            }
             Ok(Message::Close(_)) => break,
-            Ok(_) => {}
+            Ok(_) => log::debug!("speech provider drain RX unhandled websocket frame"),
             Err(e) => return Err(anyhow!("{e}")),
         }
     }
@@ -439,7 +504,9 @@ pub(crate) fn request_with_header(
 ) -> Result<Request<()>> {
     let mut request = url
         .into_client_request()
-        .with_context(|| format!("building websocket request for {url}"))?;
+        // URLs can carry query-string credentials (Gemini Live does). Do not put the
+        // URL in an error that will eventually be shown in the Settings UI or logs.
+        .context("building websocket request")?;
     request
         .headers_mut()
         .insert(name, value.parse().context("invalid auth header value")?);
