@@ -14,7 +14,7 @@ use crate::settings::secrets;
 use crate::state::{self, emit_error, events, Phase};
 use crate::stt;
 use crate::web_bridge;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
@@ -54,12 +54,15 @@ const AUDIBLE_PEAK: f32 = 0.01;
 /// app is restarted. Generous enough that a merely slow provider still lands.
 const FINALIZE_TIMEOUT: Duration = Duration::from_secs(20);
 
+const START_IDLE: u8 = 0;
+const STARTING: u8 = 1;
+const START_CANCELLED: u8 = 2;
+
 #[derive(Default)]
 pub struct Recorder {
     /// Atomic reservation for synchronous setup before `active` can hold the fully
     /// constructed take. Two entry points must never open mic/provider concurrently.
-    starting: AtomicBool,
-    start_cancelled: AtomicBool,
+    start_state: AtomicU8,
     active: Mutex<Option<ActiveTake>>,
     /// Present while a stopped take is still waiting on the provider. Sending on it
     /// abandons that wait — the escape hatch from a socket that never answers.
@@ -67,12 +70,12 @@ pub struct Recorder {
 }
 
 struct StartReservation<'a> {
-    flag: &'a AtomicBool,
+    state: &'a AtomicU8,
 }
 
 impl Drop for StartReservation<'_> {
     fn drop(&mut self) {
-        self.flag.store(false, Ordering::Release);
+        self.state.store(START_IDLE, Ordering::Release);
     }
 }
 
@@ -85,17 +88,29 @@ impl Recorder {
     }
 
     pub fn is_busy(&self) -> bool {
-        self.starting.load(Ordering::Acquire) || self.is_recording()
+        self.start_state.load(Ordering::Acquire) != START_IDLE || self.is_recording()
     }
 
     fn try_reserve_start(&self) -> Option<StartReservation<'_>> {
-        self.starting
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        self.start_state
+            .compare_exchange(START_IDLE, STARTING, Ordering::AcqRel, Ordering::Acquire)
             .ok()?;
-        self.start_cancelled.store(false, Ordering::Release);
         Some(StartReservation {
-            flag: &self.starting,
+            state: &self.start_state,
         })
+    }
+
+    fn cancel_pending_start(&self) -> bool {
+        match self.start_state.compare_exchange(
+            STARTING,
+            START_CANCELLED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => true,
+            Err(START_CANCELLED) => true,
+            Err(_) => false,
+        }
     }
 }
 
@@ -199,7 +214,7 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) -> bool {
     // A stop/cancel may arrive after the start reservation is taken but before the
     // fully constructed take can be published. Check while holding `active` so there
     // is no gap between honoring that cancellation and publishing the take.
-    if recorder.start_cancelled.swap(false, Ordering::AcqRel) {
+    if recorder.start_state.load(Ordering::Acquire) == START_CANCELLED {
         capture.stop();
         stt_task.abort();
         return false;
@@ -274,9 +289,7 @@ pub fn stop(app: &AppHandle) {
     let recorder = app.state::<Recorder>();
     let recording = recorder.active.lock().ok().and_then(|mut slot| slot.take());
     let Some(mut take) = recording else {
-        if recorder.starting.load(Ordering::Acquire) {
-            recorder.start_cancelled.store(true, Ordering::Release);
-        }
+        recorder.cancel_pending_start();
         return;
     };
 
@@ -392,8 +405,7 @@ pub fn cancel(app: &AppHandle) {
         return;
     }
 
-    if recorder.starting.load(Ordering::Acquire) {
-        recorder.start_cancelled.store(true, Ordering::Release);
+    if recorder.cancel_pending_start() {
         let _ = web_bridge::deliver_cancelled(app);
         return;
     }
@@ -464,5 +476,26 @@ mod tests {
         drop(first);
         assert!(!recorder.is_busy());
         assert!(recorder.try_reserve_start().is_some());
+    }
+
+    #[test]
+    fn pending_start_cancellation_cannot_be_reset_by_another_start() {
+        let recorder = Recorder::default();
+        let first = recorder
+            .try_reserve_start()
+            .expect("first caller should reserve start");
+        assert!(recorder.cancel_pending_start());
+        assert_eq!(
+            recorder.start_state.load(Ordering::Acquire),
+            START_CANCELLED
+        );
+        assert!(recorder.try_reserve_start().is_none());
+        assert_eq!(
+            recorder.start_state.load(Ordering::Acquire),
+            START_CANCELLED
+        );
+        drop(first);
+        assert_eq!(recorder.start_state.load(Ordering::Acquire), START_IDLE);
+        assert!(!recorder.is_busy());
     }
 }
