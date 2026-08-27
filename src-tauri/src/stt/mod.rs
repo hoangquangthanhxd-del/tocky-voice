@@ -66,6 +66,12 @@ pub trait WsProtocol: Send {
     }
     /// Frame that tells the vendor no more audio is coming.
     fn finish_message(&self) -> Message;
+    /// True when a post-audio server frame means the provider has flushed the current
+    /// utterance. Most providers close their socket; Gemini Live keeps the session open
+    /// and instead marks the turn complete.
+    fn drain_complete(&self, _text: &str) -> bool {
+        false
+    }
     /// Turn one inbound text frame into zero or more transcript events.
     ///
     /// Returns `Err` when the frame is the vendor telling us the session is over —
@@ -334,11 +340,15 @@ async fn drain(
     while let Some(msg) = reader.next().await {
         match msg {
             Ok(Message::Text(text)) => {
+                let complete = protocol.drain_complete(&text);
                 for event in protocol.parse(&text)? {
                     if let SttEvent::Final(ref t) = event {
                         tail.push(t.clone());
                     }
                     let _ = events.send(event);
+                }
+                if complete {
+                    break;
                 }
             }
             Ok(Message::Close(_)) => break,

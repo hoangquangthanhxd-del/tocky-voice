@@ -90,6 +90,13 @@ impl WsProtocol for Gemini {
         Message::Text(json!({ "realtimeInput": { "audioStreamEnd": true } }).to_string())
     }
 
+    fn drain_complete(&self, text: &str) -> bool {
+        serde_json::from_str::<Value>(text)
+            .ok()
+            .and_then(|value| value.get("serverContent")?.get("turnComplete")?.as_bool())
+            .unwrap_or(false)
+    }
+
     fn parse(&mut self, text: &str) -> Result<Vec<SttEvent>> {
         let Ok(value) = serde_json::from_str::<Value>(text) else {
             return Ok(Vec::new());
@@ -227,6 +234,13 @@ mod tests {
             .parse(r#"{"serverContent":{"inputTranscription":{"text":"dây curoa 7PK2604"}}}"#)
             .unwrap();
         assert!(matches!(&final_events[0], SttEvent::Final(t) if t == "dây curoa 7PK2604"));
+    }
+
+    #[test]
+    fn turn_complete_ends_drain_without_waiting_for_socket_close() {
+        let protocol = gemini();
+        assert!(protocol.drain_complete(r#"{"serverContent":{"turnComplete":true}}"#));
+        assert!(!protocol.drain_complete(r#"{"serverContent":{"turnComplete":false}}"#));
     }
 
     #[test]
