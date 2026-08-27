@@ -12,7 +12,7 @@ use crate::overlay;
 use crate::refine::{self, RefineRequest};
 use crate::settings::{defaults, secrets, OutputAction};
 use crate::state::{self, emit_error, events, Phase};
-use crate::{audio, inject, terminology};
+use crate::{audio, inject, terminology, web_bridge};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -56,6 +56,9 @@ pub async fn finish(
 
     if transcript.trim().is_empty() {
         if heard_audio {
+            // A bridge caller needs a terminal response even when the provider produced
+            // no words; otherwise the browser would wait forever for this request id.
+            let _ = web_bridge::deliver_empty(app);
             // Someone pressed the key and said nothing, or the take was too short to
             // land a word. A quiet no-op, not an error toast.
             overlay::hide(app);
@@ -78,6 +81,17 @@ pub async fn finish(
         mapped_transcript
     };
     let final_text = terminology::apply(&refined_text, &settings.terminology);
+
+    // Browser-initiated takes have an explicit owner. Return the final text to that
+    // request and do not synthesize a paste keystroke into whatever currently has OS
+    // focus. Normal hotkey dictation continues through the unchanged paste path below.
+    if web_bridge::deliver_result(app, &transcript, &final_text) {
+        overlay::hide(app);
+        feedback::play(feedback::Cue::Done, settings.audio.feedback_volume);
+        record_history(app, &settings, &mode, &transcript, &final_text, &pcm);
+        state::emit_status(app, Phase::Idle, mode_id);
+        return;
+    }
 
     // Hide the overlay before pasting: it must not be frontmost when the keystroke
     // lands, or the text goes to us instead of the app the user was typing in.
@@ -221,6 +235,9 @@ fn record_history(
 /// Shared failure path: surface the message, play the error cue, return to idle.
 pub fn fail(app: &AppHandle, mode_id: &str, payload: ErrorPayload) {
     let settings = state::settings_snapshot(app);
+    // A bridge request receives the same structured failure as the desktop UI. Taking
+    // it here also guarantees the request cannot accidentally capture a later hotkey take.
+    let _ = web_bridge::deliver_error(app, &payload);
     // Idle first: the overlay renders the error only once it is no longer showing a
     // take in progress, and `show_error` is what decides when the panel goes away.
     state::emit_status(app, Phase::Idle, mode_id);
