@@ -1,19 +1,21 @@
-//! Remembering and restoring the frontmost application.
+//! Remembering and restoring the frontmost application/window.
 //!
-//! Pasting sends ⌘V/^V to whatever app is frontmost. Anything that gives our own windows
+//! Pasting sends ⌘V/^V to whatever is frontmost. Anything that gives our own windows
 //! focus mid-dictation — clicking Stop on the overlay, opening Settings — would send
-//! the text to us instead. So the target app is captured when recording starts and
+//! the text to us instead. So the target is captured when recording starts and
 //! reactivated just before the keystroke.
 
 /// Where the pasted text should go.
 ///
-/// Deliberately not an `Option<pid>`: "we know there is nowhere to paste" and "this
-/// platform does not track focus" need opposite handling, and collapsing them into
-/// `None` silently disables pasting everywhere focus tracking is not implemented.
+/// `App` stores the platform's native target identifier in a wide integer: a process id
+/// on macOS and a window handle on Windows. Deliberately not an `Option`: "we know
+/// there is nowhere to paste" and "this platform does not track focus" need opposite
+/// handling, and collapsing them into `None` silently disables pasting everywhere focus
+/// tracking is not implemented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetApp {
-    /// Another app was frontmost; bring it back before the keystroke.
-    App(i32),
+    /// Another app/window was frontmost; bring it back before the keystroke.
+    App(i64),
     /// One of our own windows was frontmost, so the text has nowhere to land.
     OurOwnWindow,
     /// Focus is not tracked here; paste into whatever happens to be frontmost.
@@ -52,11 +54,12 @@ mod platform {
             return TargetApp::OurOwnWindow;
         }
         log::info!("paste target: {name} (pid {pid})");
-        TargetApp::App(pid)
+        TargetApp::App(pid as i64)
     }
 
     /// Brings the captured app back to the front. Returns false when it has since quit.
-    pub fn restore(pid: i32) -> bool {
+    pub fn restore(target: i64) -> bool {
+        let pid = target as i32;
         let Some(app) =
             (unsafe { NSRunningApplication::runningApplicationWithProcessIdentifier(pid) })
         else {
@@ -70,19 +73,61 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+mod platform {
+    use super::TargetApp;
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId, IsWindow, SetForegroundWindow,
+    };
+
+    /// Capture the exact foreground HWND before our overlay has any chance to receive
+    /// focus. A PID is not precise enough on Windows because one process can own several
+    /// top-level windows and Ctrl+V must return to the exact editor that was active.
+    pub fn capture() -> TargetApp {
+        let hwnd = unsafe { GetForegroundWindow() };
+        if hwnd as isize == 0 {
+            log::warn!("could not determine the foreground window; paste target untracked");
+            return TargetApp::Untracked;
+        }
+
+        let mut pid = 0u32;
+        unsafe {
+            GetWindowThreadProcessId(hwnd, &mut pid);
+        }
+        if pid == std::process::id() {
+            log::info!("take started from our own Windows window; no paste target");
+            return TargetApp::OurOwnWindow;
+        }
+
+        log::info!("Windows paste target: hwnd={} pid={pid}", hwnd as isize);
+        TargetApp::App(hwnd as isize as i64)
+    }
+
+    /// Reactivate the exact window captured at take start. `SetForegroundWindow` may
+    /// legally fail when Windows' foreground-lock rules refuse a process that did not
+    /// receive recent user input; in that case the caller falls back to the current
+    /// foreground window instead of treating delivery as a hard failure.
+    pub fn restore(target: i64) -> bool {
+        let hwnd = target as isize as HWND;
+        if unsafe { IsWindow(hwnd) } == 0 {
+            return false;
+        }
+        unsafe { SetForegroundWindow(hwnd) != 0 }
+    }
+}
+
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
 mod platform {
     use super::TargetApp;
 
-    /// Windows and Linux have no focus tracking here yet. Hiding the overlay before the
-    /// keystroke already returns focus to the previous window in practice, so the paste
-    /// lands correctly — it is only the "started from our own window" case that goes
-    /// undetected.
+    /// Linux focus tracking is not implemented yet. Paste into whichever application is
+    /// frontmost when dictation finishes.
     pub fn capture() -> TargetApp {
         TargetApp::Untracked
     }
 
-    pub fn restore(_pid: i32) -> bool {
+    pub fn restore(_target: i64) -> bool {
         false
     }
 }
@@ -93,12 +138,15 @@ pub use platform::capture;
 /// a keystroke sent immediately after activation can still land on the old app.
 pub fn restore_and_settle(target: TargetApp) {
     match target {
-        TargetApp::App(pid) => {
-            if platform::restore(pid) {
+        TargetApp::App(native_target) => {
+            if platform::restore(native_target) {
                 std::thread::sleep(std::time::Duration::from_millis(120));
-                log::info!("reactivated pid {pid} for paste");
+                log::info!("reactivated paste target {native_target}");
             } else {
-                log::warn!("target app {pid} is gone; pasting into whatever is frontmost");
+                log::warn!(
+                    "paste target {native_target} is gone or could not be activated; \
+                     pasting into whatever is frontmost"
+                );
             }
         }
         TargetApp::Untracked => {}
