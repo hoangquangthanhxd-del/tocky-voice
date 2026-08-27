@@ -253,7 +253,7 @@ fn handle_command(
                 send_protocol_error(tx, Some(&request_id), "FIELD_CONTEXT_TOO_LARGE");
                 return;
             }
-            if app.state::<session::Recorder>().is_recording() {
+            if app.state::<session::Recorder>().is_busy() {
                 send_protocol_error(tx, Some(&request_id), "BUSY");
                 return;
             }
@@ -330,7 +330,8 @@ fn handle_command(
 /// A `listen` URL is accepted only after the same browser connection prepared the
 /// matching request id + nonce.
 pub fn handle_deep_link(app: &AppHandle, raw_url: &str) -> bool {
-    if raw_url.eq_ignore_ascii_case("tocky://wake") || raw_url.eq_ignore_ascii_case("tocky://wake/") {
+    if raw_url.eq_ignore_ascii_case("tocky://wake") || raw_url.eq_ignore_ascii_case("tocky://wake/")
+    {
         return true;
     }
     let Some((request_id, nonce)) = parse_listen_url(raw_url) else {
@@ -356,8 +357,7 @@ pub fn handle_deep_link(app: &AppHandle, raw_url: &str) -> bool {
         request.tx.clone()
     };
 
-    session::start(app, None);
-    if app.state::<session::Recorder>().is_recording() {
+    if session::start(app, None) {
         send_json(
             &tx,
             json!({
@@ -440,9 +440,8 @@ fn owns_request(app: &AppHandle, client_id: Uuid, request_id: &str) -> bool {
         .lock()
         .ok()
         .and_then(|slot| {
-            slot.as_ref().map(|request| {
-                request.client_id == client_id && request.request_id == request_id
-            })
+            slot.as_ref()
+                .map(|request| request.client_id == client_id && request.request_id == request_id)
         })
         .unwrap_or(false)
 }
@@ -544,11 +543,7 @@ fn reject(status: StatusCode, message: &str) -> ErrorResponse {
     response
 }
 
-fn send_protocol_error(
-    tx: &mpsc::UnboundedSender<Message>,
-    request_id: Option<&str>,
-    code: &str,
-) {
+fn send_protocol_error(tx: &mpsc::UnboundedSender<Message>, request_id: Option<&str>, code: &str) {
     send_json(
         tx,
         json!({
@@ -606,10 +601,14 @@ mod tests {
 
     #[test]
     fn origin_allowlist_is_exact() {
-        assert!(origin_allowed("https://staging.ptap-next-staging.pages.dev"));
+        assert!(origin_allowed(
+            "https://staging.ptap-next-staging.pages.dev"
+        ));
         assert!(origin_allowed("http://127.0.0.1:5173"));
         assert!(!origin_allowed("https://evil.example"));
-        assert!(!origin_allowed("https://staging.ptap-next-staging.pages.dev.evil.example"));
+        assert!(!origin_allowed(
+            "https://staging.ptap-next-staging.pages.dev.evil.example"
+        ));
     }
 
     #[test]
@@ -617,10 +616,19 @@ mod tests {
         let request_id = Uuid::new_v4().to_string();
         let nonce = "a2345678901234567890123456789012";
         let url = format!("tocky://listen?request_id={request_id}&nonce={nonce}");
-        assert_eq!(parse_listen_url(&url), Some((request_id, nonce.to_string())));
+        assert_eq!(
+            parse_listen_url(&url),
+            Some((request_id, nonce.to_string()))
+        );
 
-        assert!(parse_listen_url("tocky://listen?request_id=nope&nonce=a2345678901234567890123456789012").is_none());
-        assert!(parse_listen_url("tocky://listen?request_id=00000000-0000-4000-8000-000000000001&nonce=short").is_none());
+        assert!(parse_listen_url(
+            "tocky://listen?request_id=nope&nonce=a2345678901234567890123456789012"
+        )
+        .is_none());
+        assert!(parse_listen_url(
+            "tocky://listen?request_id=00000000-0000-4000-8000-000000000001&nonce=short"
+        )
+        .is_none());
         assert!(parse_listen_url("https://listen?request_id=00000000-0000-4000-8000-000000000001&nonce=a2345678901234567890123456789012").is_none());
     }
 

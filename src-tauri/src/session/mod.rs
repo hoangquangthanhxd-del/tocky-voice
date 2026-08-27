@@ -56,10 +56,23 @@ const FINALIZE_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Default)]
 pub struct Recorder {
+    /// Atomic reservation for synchronous setup before `active` can hold the fully
+    /// constructed take. Two entry points must never open mic/provider concurrently.
+    starting: AtomicBool,
     active: Mutex<Option<ActiveTake>>,
     /// Present while a stopped take is still waiting on the provider. Sending on it
     /// abandons that wait — the escape hatch from a socket that never answers.
     finalizing: Mutex<Option<oneshot::Sender<()>>>,
+}
+
+struct StartReservation<'a> {
+    flag: &'a AtomicBool,
+}
+
+impl Drop for StartReservation<'_> {
+    fn drop(&mut self) {
+        self.flag.store(false, Ordering::Release);
+    }
 }
 
 impl Recorder {
@@ -68,6 +81,19 @@ impl Recorder {
             .lock()
             .map(|slot| slot.is_some())
             .unwrap_or(false)
+    }
+
+    pub fn is_busy(&self) -> bool {
+        self.starting.load(Ordering::Acquire) || self.is_recording()
+    }
+
+    fn try_reserve_start(&self) -> Option<StartReservation<'_>> {
+        self.starting
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()?;
+        Some(StartReservation {
+            flag: &self.starting,
+        })
     }
 }
 
@@ -80,11 +106,20 @@ pub fn toggle(app: &AppHandle) {
 }
 
 /// Begins recording. `mode_id` switches mode first; `None` keeps the active one.
-/// A no-op if a take is already running, so a repeated key press is harmless.
-pub fn start(app: &AppHandle, mode_id: Option<String>) {
+/// Returns true only when this caller established the take. A concurrent start or an
+/// already-running take returns false before another microphone/provider is opened.
+pub fn start(app: &AppHandle, mode_id: Option<String>) -> bool {
     let recorder = app.state::<Recorder>();
-    if recorder.is_recording() {
-        return;
+    let Some(_start_reservation) = recorder.try_reserve_start() else {
+        return false;
+    };
+    if recorder
+        .active
+        .lock()
+        .map(|slot| slot.is_some())
+        .unwrap_or(true)
+    {
+        return false;
     }
 
     // The setup wizard's level meter holds the device open. Some Windows drivers give
@@ -108,7 +143,7 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
             ErrorPayload::with_detail(ErrorKind::NoSttKey, format!("{:?}", settings.stt.provider)),
         );
         feedback::play(feedback::Cue::Error, settings.audio.feedback_volume);
-        return;
+        return false;
     };
 
     let (chunk_tx, mut chunk_rx) = mpsc::unbounded_channel::<capture::CaptureChunk>();
@@ -120,7 +155,7 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
                 ErrorPayload::with_detail(ErrorKind::MicUnavailable, format!("{e:#}")),
             );
             feedback::play(feedback::Cue::Error, settings.audio.feedback_volume);
-            return;
+            return false;
         }
     };
 
@@ -154,18 +189,31 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
         stt::build_protocol_with_terminology(&settings.stt, &settings.terminology, api_key);
     let stt_task = tauri::async_runtime::spawn(stt::run_stream(protocol, audio_rx, event_tx));
 
-    if let Ok(mut slot) = recorder.active.lock() {
-        *slot = Some(ActiveTake {
-            capture,
-            audio_tx: Some(audio_tx),
-            cancelled: Arc::new(AtomicBool::new(false)),
-            heard_audio,
-            pcm,
-            mode_id: mode_id.clone(),
-            target_app,
-            stt_task,
-        });
+    let Ok(mut slot) = recorder.active.lock() else {
+        capture.stop();
+        stt_task.abort();
+        return false;
+    };
+    debug_assert!(
+        slot.is_none(),
+        "start reservation must prevent active overwrite"
+    );
+    if slot.is_some() {
+        capture.stop();
+        stt_task.abort();
+        return false;
     }
+    *slot = Some(ActiveTake {
+        capture,
+        audio_tx: Some(audio_tx),
+        cancelled: Arc::new(AtomicBool::new(false)),
+        heard_audio,
+        pcm,
+        mode_id: mode_id.clone(),
+        target_app,
+        stt_task,
+    });
+    drop(slot);
 
     // Pump: capture thread → PCM archive + level meter → provider socket.
     //
@@ -208,6 +256,7 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
     overlay::show(app);
     feedback::play(feedback::Cue::Start, settings.audio.feedback_volume);
     state::emit_status(app, Phase::Recording, &mode_id);
+    true
 }
 
 /// Ends the take and hands the result to the transcript → refine → paste pipeline.
@@ -383,4 +432,22 @@ pub fn set_active_mode(app: &AppHandle, mode_id: &str) {
     }
     let _ = app.emit(events::SETTINGS_CHANGED, ());
     state::emit_status(app, Phase::Idle, mode_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn start_reservation_is_exclusive() {
+        let recorder = Recorder::default();
+        let first = recorder
+            .try_reserve_start()
+            .expect("first caller should reserve start");
+        assert!(recorder.is_busy());
+        assert!(recorder.try_reserve_start().is_none());
+        drop(first);
+        assert!(!recorder.is_busy());
+        assert!(recorder.try_reserve_start().is_some());
+    }
 }
