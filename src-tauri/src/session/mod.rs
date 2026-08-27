@@ -13,6 +13,7 @@ use crate::overlay;
 use crate::settings::secrets;
 use crate::state::{self, emit_error, events, Phase};
 use crate::stt;
+use crate::web_bridge;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -343,6 +344,7 @@ pub fn cancel(app: &AppHandle) {
 /// The shared ending of an abandoned take: no text, no error, back to idle.
 fn abandon(app: &AppHandle, mode_id: &str) {
     let settings = state::settings_snapshot(app);
+    let _ = web_bridge::deliver_cancelled(app);
     overlay::hide(app);
     feedback::play(feedback::Cue::Cancel, settings.audio.feedback_volume);
     let _ = app.emit(events::PARTIAL, String::new());
