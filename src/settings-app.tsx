@@ -25,9 +25,11 @@ import { DictationPanel } from "./components/dictation-panel";
 import { HistoryList } from "./components/history-list";
 import { ModesEditor } from "./components/modes-editor";
 import { ProvidersEditor } from "./components/providers-editor";
+import { TerminologyEditor } from "./components/terminology-editor";
 import { AboutPanel } from "./components/about-panel";
 import { UpdateBanner } from "./components/update-banner";
 import {
+  BookIcon,
   InfoIcon,
   KeyIcon,
   LogIcon,
@@ -41,6 +43,7 @@ const SECTIONS = [
   { id: "dictate", key: "dictate", Icon: MicIcon },
   { id: "modes", key: "modes", Icon: ModesIcon },
   { id: "providers", key: "providers", Icon: PlugIcon },
+  { id: "terminology", key: "terminology", Icon: BookIcon },
   { id: "behaviour", key: "hotkeys", Icon: KeyIcon },
   { id: "history", key: "history", Icon: LogIcon },
   { id: "about", key: "about", Icon: InfoIcon },
@@ -49,11 +52,29 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 const SAVE_DEBOUNCE_MS = 400;
+const SETTINGS_LOAD_ATTEMPTS = 20;
+const SETTINGS_LOAD_RETRY_MS = 250;
+
+async function getSettingsWithRetry(): Promise<AppSettings> {
+  let lastError: unknown = new Error("settings unavailable");
+  for (let attempt = 0; attempt < SETTINGS_LOAD_ATTEMPTS; attempt += 1) {
+    try {
+      return await api.getSettings();
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < SETTINGS_LOAD_ATTEMPTS) {
+        await new Promise((resolve) => window.setTimeout(resolve, SETTINGS_LOAD_RETRY_MS));
+      }
+    }
+  }
+  throw lastError;
+}
 
 export function SettingsApp() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [section, setSection] = useState<SectionId>("dictate");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [presets, setPresets] = useState<LlmPreset[]>([]);
   const [version, setVersion] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -70,23 +91,36 @@ export function SettingsApp() {
   // by hotkey), so an inbound update is not echoed straight back.
   const dirty = useRef(false);
 
+  const loadSettings = useCallback(() => {
+    setLoadError(null);
+    return getSettingsWithRetry()
+      .then((next) => {
+        setSettings(next);
+        setLoadError(null);
+      })
+      .catch((error) => {
+        console.error("failed to load settings", error);
+        setLoadError(String(error));
+      });
+  }, []);
+
   useEffect(() => {
     getVersion().then((v) => {
       setVersion(v);
       // The rail already shows the version in small type; the title bar is the
       // spot people actually glance at, so it carries the version too.
-      getCurrentWindow().setTitle(`Tocky Voice v${v}`).catch(() => undefined);
+      getCurrentWindow().setTitle(`Tocky Voice Automotive v${v}`).catch(() => undefined);
     }).catch(() => undefined);
-    api.getSettings().then(setSettings).catch(() => undefined);
+    void loadSettings();
     api.listLlmPresets().then(setPresets).catch(() => undefined);
     const off = listen(api.EVENTS.settingsChanged, () => {
       if (dirty.current) return;
-      api.getSettings().then(setSettings).catch(() => undefined);
+      void loadSettings();
     });
     return () => {
       off.then((fn) => fn()).catch(() => undefined);
     };
-  }, []);
+  }, [loadSettings]);
 
   const update = useCallback((next: AppSettings) => {
     dirty.current = true;
@@ -103,7 +137,22 @@ export function SettingsApp() {
     }, SAVE_DEBOUNCE_MS);
   }, []);
 
-  if (!settings) return <div className="loading">{t.nav.loading}</div>;
+  if (!settings) {
+    return (
+      <div className="loading">
+        {loadError ? (
+          <>
+            <div>Could not load settings: {loadError}</div>
+            <button type="button" onClick={() => void loadSettings()}>
+              Retry
+            </button>
+          </>
+        ) : (
+          t.nav.loading
+        )}
+      </div>
+    );
+  }
 
   // Shown over everything: on a fresh install none of the tabs behind it can do
   // anything useful until the walkthrough's steps are done anyway.
@@ -126,7 +175,7 @@ export function SettingsApp() {
         <div className="rail__brand">
           <WaveMark className="rail__mark" />
           <div>
-            <div className="rail__name">Tocky Voice</div>
+            <div className="rail__name">Tocky Voice Automotive</div>
             <span className="rail__sub">{version ? `v${version}` : ""}</span>
           </div>
         </div>
@@ -169,6 +218,9 @@ export function SettingsApp() {
           )}
           {section === "providers" && (
             <ProvidersEditor settings={settings} onSettingsChange={update} />
+          )}
+          {section === "terminology" && (
+            <TerminologyEditor settings={settings} onSettingsChange={update} />
           )}
           {section === "behaviour" && (
             <BehaviourEditor settings={settings} onSettingsChange={update} />

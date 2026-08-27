@@ -6,13 +6,13 @@
 //! even when delivery fails, so nothing is ever lost silently.
 
 use crate::audio::feedback;
+use crate::errors::{ErrorKind, ErrorPayload};
 use crate::history::{self, HistoryEntry};
 use crate::overlay;
 use crate::refine::{self, RefineRequest};
-use crate::settings::{secrets, defaults, OutputAction};
-use crate::errors::{ErrorKind, ErrorPayload};
+use crate::settings::{defaults, secrets, OutputAction};
 use crate::state::{self, emit_error, events, Phase};
-use crate::{audio, inject};
+use crate::{audio, inject, terminology};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -70,12 +70,14 @@ pub async fn finish(
         return;
     }
 
-    let final_text = if mode.ai_cleanup {
+    let mapped_transcript = terminology::apply(&transcript, &settings.terminology);
+    let refined_text = if mode.ai_cleanup {
         state::emit_status(app, Phase::Refining, mode_id);
-        refine_or_fall_back(app, &settings, &mode, &transcript).await
+        refine_or_fall_back(app, &settings, &mode, &mapped_transcript).await
     } else {
-        transcript.clone()
+        mapped_transcript
     };
+    let final_text = terminology::apply(&refined_text, &settings.terminology);
 
     // Hide the overlay before pasting: it must not be frontmost when the keystroke
     // lands, or the text goes to us instead of the app the user was typing in.
@@ -137,7 +139,11 @@ async fn refine_or_fall_back(
         .filter(|p| p.needs_key)
         .and_then(|p| secrets::get_key(p.secret_key));
 
-    if defaults::preset(&llm.preset).map(|p| p.needs_key).unwrap_or(true) && api_key.is_none() {
+    if defaults::preset(&llm.preset)
+        .map(|p| p.needs_key)
+        .unwrap_or(true)
+        && api_key.is_none()
+    {
         emit_error(
             app,
             ErrorPayload::with_detail(ErrorKind::NoLlmKey, llm.preset.clone()),

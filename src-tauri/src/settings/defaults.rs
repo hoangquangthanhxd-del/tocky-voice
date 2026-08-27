@@ -58,8 +58,14 @@ pub fn llm_presets() -> &'static [LlmPreset] {
             label: "Google Gemini",
             wire: LlmWire::OpenAiCompatible,
             base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
-            default_model: "gemini-2.5-flash",
-            models: &["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
+            // Gemini 2.5 can return model-not-found for newly created projects.
+            // Flash-Lite is the low-latency free-tier choice for transcript cleanup.
+            default_model: "gemini-3.5-flash-lite",
+            models: &[
+                "gemini-3.5-flash-lite",
+                "gemini-3.5-flash",
+                "gemini-3.6-flash",
+            ],
             secret_key: "gemini",
             signup_url: "https://aistudio.google.com/apikey",
             needs_key: true,
@@ -293,6 +299,10 @@ pub fn default_hotkeys() -> HotkeySettings {
     }
 }
 
+pub fn default_terminology_settings() -> TerminologySettings {
+    TerminologySettings::default()
+}
+
 pub fn default_settings() -> AppSettings {
     AppSettings {
         stt: SttSettings {
@@ -302,6 +312,7 @@ pub fn default_settings() -> AppSettings {
             language: "vi".into(),
             language_hints: vec!["vi".into(), "en".into()],
         },
+        terminology: default_terminology_settings(),
         llm: LlmSettings {
             preset: "deepseek".into(),
             model: "deepseek-v4-flash".into(),

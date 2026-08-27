@@ -125,9 +125,11 @@ mod endpoint_tests {
     #[test]
     fn every_preset_extra_body_is_a_json_object() {
         for preset in defaults::llm_presets() {
-            let Some(raw) = preset.extra_body else { continue };
-            let parsed: serde_json::Value = serde_json::from_str(raw)
-                .unwrap_or_else(|e| panic!("preset {}: {e}", preset.id));
+            let Some(raw) = preset.extra_body else {
+                continue;
+            };
+            let parsed: serde_json::Value =
+                serde_json::from_str(raw).unwrap_or_else(|e| panic!("preset {}: {e}", preset.id));
             assert!(parsed.is_object(), "preset {} is not an object", preset.id);
         }
     }
@@ -173,9 +175,7 @@ pub async fn refine(req: RefineRequest) -> Result<String> {
 
     let raw = match endpoint.wire {
         LlmWire::Anthropic => anthropic::complete(&client, &endpoint.base_url, &req).await?,
-        LlmWire::OpenAiCompatible => {
-            openai_compatible::complete(&client, &endpoint, &req).await?
-        }
+        LlmWire::OpenAiCompatible => openai_compatible::complete(&client, &endpoint, &req).await?,
     };
     Ok(cleanup_output(&raw))
 }

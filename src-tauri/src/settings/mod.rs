@@ -20,6 +20,7 @@ pub enum SttProviderKind {
     Soniox,
     Deepgram,
     AssemblyAi,
+    Gemini,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,7 +32,7 @@ pub struct SttSettings {
     pub deepgram_model: String,
     /// Primary language code sent to providers that want a single language (Deepgram).
     pub language: String,
-    /// Hint list for providers that accept several (Soniox). Order matters — most likely first.
+    /// Hint list for providers that accept several (Soniox/Gemini). Order matters — most likely first.
     pub language_hints: Vec<String>,
 }
 
@@ -108,9 +109,50 @@ pub struct HistorySettings {
     pub audio_retention_days: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TerminologyEntry {
+    pub canonical: String,
+    pub aliases: Vec<String>,
+    /// Lets users temporarily disable a mapping without deleting it.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Higher values win provider caps and equal-length alias conflicts.
+    #[serde(default = "default_user_term_priority")]
+    pub priority: i32,
+    /// Provenance for bundled/imported terms; user-created entries normally leave this empty.
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Whether this canonical form is also sent to the speech provider as a recognition hint.
+    #[serde(default = "default_true")]
+    pub provider_hint: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TerminologySettings {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub send_to_stt: bool,
+    #[serde(default)]
+    pub entries: Vec<TerminologyEntry>,
+}
+
+impl Default for TerminologySettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            send_to_stt: true,
+            entries: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub stt: SttSettings,
+    /// Domain vocabulary and deterministic transcript replacements.
+    #[serde(default)]
+    pub terminology: TerminologySettings,
     pub llm: LlmSettings,
     pub modes: Vec<Mode>,
     pub active_mode_id: String,
@@ -149,9 +191,13 @@ fn default_true() -> bool {
     true
 }
 
+fn default_user_term_priority() -> i32 {
+    2_000
+}
+
 /// Every credential name the app can store, for backend migration.
 pub fn all_secret_accounts() -> Vec<&'static str> {
-    let mut accounts = vec!["soniox", "deepgram", "assemblyai"];
+    let mut accounts = vec!["soniox", "deepgram", "assemblyai", "gemini"];
     accounts.extend(defaults::llm_presets().iter().map(|p| p.secret_key));
     accounts
 }
@@ -170,7 +216,9 @@ impl AppSettings {
 
     /// LLM config for a mode, falling back to the global one.
     pub fn llm_for(&self, mode: &Mode) -> LlmSettings {
-        mode.llm_override.clone().unwrap_or_else(|| self.llm.clone())
+        mode.llm_override
+            .clone()
+            .unwrap_or_else(|| self.llm.clone())
     }
 }
 
@@ -200,6 +248,7 @@ pub fn load(app: &AppHandle) -> AppSettings {
     match serde_json::from_str::<AppSettings>(&raw) {
         Ok(mut s) => {
             restore_missing_dictation_hotkey(&mut s);
+            migrate_legacy_gemini_models(&mut s);
             s
         }
         Err(e) => {
@@ -221,6 +270,31 @@ fn restore_missing_dictation_hotkey(settings: &mut AppSettings) {
         let replacement = defaults::default_hotkeys().toggle;
         log::info!("no dictation hotkey was set; restoring the default {replacement:?}");
         settings.hotkeys.toggle = replacement;
+    }
+}
+
+/// New Gemini projects may not have access to the legacy 2.5 model aliases. Keep
+/// existing installs working by moving only the app's old built-in Gemini choices to
+/// current free-tier models; custom model names are left untouched.
+fn migrate_legacy_gemini_models(settings: &mut AppSettings) {
+    fn migrate(llm: &mut LlmSettings) {
+        if llm.preset != "gemini" {
+            return;
+        }
+        let replacement = match llm.model.as_str() {
+            "gemini-2.5-flash" | "gemini-2.5-flash-lite" => "gemini-3.5-flash-lite",
+            "gemini-2.5-pro" => "gemini-3.5-flash",
+            _ => return,
+        };
+        log::info!("migrating Gemini LLM model {} -> {replacement}", llm.model);
+        llm.model = replacement.into();
+    }
+
+    migrate(&mut settings.llm);
+    for mode in &mut settings.modes {
+        if let Some(llm) = mode.llm_override.as_mut() {
+            migrate(llm);
+        }
     }
 }
 
@@ -278,13 +352,51 @@ mod tests {
     }
 
     #[test]
+    fn settings_from_before_terminology_receive_an_empty_dictionary() {
+        let mut raw = serde_json::to_value(defaults::default_settings()).unwrap();
+        raw.as_object_mut().unwrap().remove("terminology");
+
+        let parsed: AppSettings = serde_json::from_value(raw).unwrap();
+
+        assert!(parsed.terminology.entries.is_empty());
+    }
+
+    #[test]
+    fn legacy_gemini_models_are_migrated_but_custom_models_are_not() {
+        let mut settings = defaults::default_settings();
+        settings.llm = LlmSettings {
+            preset: "gemini".into(),
+            model: "gemini-2.5-flash".into(),
+            base_url: None,
+            max_tokens: 2048,
+        };
+        settings.modes[0].llm_override = Some(LlmSettings {
+            preset: "gemini".into(),
+            model: "my-private-gemini-model".into(),
+            base_url: None,
+            max_tokens: 2048,
+        });
+
+        migrate_legacy_gemini_models(&mut settings);
+
+        assert_eq!(settings.llm.model, "gemini-3.5-flash-lite");
+        assert_eq!(
+            settings.modes[0].llm_override.as_ref().unwrap().model,
+            "my-private-gemini-model"
+        );
+    }
+
+    #[test]
     fn a_dictation_key_the_user_chose_themselves_is_left_alone() {
         let mut settings = defaults::default_settings();
         settings.hotkeys.toggle = Some("Control+Shift+Space".into());
 
         restore_missing_dictation_hotkey(&mut settings);
 
-        assert_eq!(settings.hotkeys.toggle.as_deref(), Some("Control+Shift+Space"));
+        assert_eq!(
+            settings.hotkeys.toggle.as_deref(),
+            Some("Control+Shift+Space")
+        );
     }
 }
 

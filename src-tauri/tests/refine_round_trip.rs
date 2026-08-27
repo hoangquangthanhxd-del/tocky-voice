@@ -48,6 +48,12 @@ async fn cleans_up_a_messy_vietnamese_transcript() {
     // The point of the pass is punctuation and capitalisation, and English technical
     // terms must survive untranslated.
     assert!(cleaned.contains('.'), "no sentence punctuation was added");
-    assert!(cleaned.contains("deploy"), "the term 'deploy' was not preserved");
-    assert!(cleaned.contains("server"), "the term 'server' was not preserved");
+    assert!(
+        cleaned.contains("deploy"),
+        "the term 'deploy' was not preserved"
+    );
+    assert!(
+        cleaned.contains("server"),
+        "the term 'server' was not preserved"
+    );
 }

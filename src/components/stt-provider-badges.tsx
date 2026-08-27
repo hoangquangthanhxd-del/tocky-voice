@@ -3,9 +3,10 @@
  *
  * Exactly one badge each, because each provider has exactly one reason to be chosen:
  *
- *   Soniox      → Best for Vietnamese   (most accurate on mixed VI/EN; no free credit)
- *   Deepgram    → Free $200             (largest free allowance; ~690 hours)
- *   AssemblyAI  → Free $50              (English only on streaming)
+ *   Soniox      → Best for Vietnamese
+ *   Google Gemini → Free tier
+ *   Deepgram    → Free $200
+ *   AssemblyAI  → Free $50
  *
  * A row of four chips per provider says nothing — the point of a badge is that it can
  * be read at a glance while scanning a list.
@@ -25,11 +26,13 @@ export function SttBadge({ provider }: { provider: Provider }) {
   const label =
     provider.badge === "free_credit"
       ? t.stt.free_credit.replace("{amount}", provider.freeCredit ?? "")
-      : t.stt.best_vietnamese;
+      : provider.badge === "free_tier"
+        ? t.stt.free_tier
+        : t.stt.best_vietnamese;
 
   // Green reads as "costs you nothing to try", amber as "this is the good one" — the
   // two reasons are different, so they must not share a colour.
-  const tone = provider.badge === "free_credit" ? "chip--ok" : "chip--star";
+  const tone = provider.badge === "best_vietnamese" ? "chip--star" : "chip--ok";
 
   return <span className={`chip ${tone}`}>{label}</span>;
 }
@@ -37,5 +40,5 @@ export function SttBadge({ provider }: { provider: Provider }) {
 /** The one-line description, in the user's language. */
 export function useSttNote(provider: Provider): string {
   const t = useT();
-  return t.stt[provider.id as "soniox" | "deepgram" | "assembly_ai"];
+  return t.stt[provider.id as "soniox" | "deepgram" | "assembly_ai" | "gemini"];
 }

@@ -72,13 +72,18 @@ impl WsProtocol for AssemblyAi {
             .get("turn_is_formatted")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        let turn_order = value.get("turn_order").and_then(|v| v.as_i64()).unwrap_or(0);
+        let turn_order = value
+            .get("turn_order")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
 
-        Ok(if end_of_turn && formatted && turn_order > self.last_committed_turn {
-            self.last_committed_turn = turn_order;
-            vec![SttEvent::Final(transcript.to_string())]
-        } else {
-            vec![SttEvent::Partial(transcript.to_string())]
-        })
+        Ok(
+            if end_of_turn && formatted && turn_order > self.last_committed_turn {
+                self.last_committed_turn = turn_order;
+                vec![SttEvent::Final(transcript.to_string())]
+            } else {
+                vec![SttEvent::Partial(transcript.to_string())]
+            },
+        )
     }
 }

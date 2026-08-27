@@ -7,10 +7,10 @@
 mod pipeline;
 
 use crate::audio::{capture, feedback, mic_test, resample};
+use crate::errors::{ErrorKind, ErrorPayload};
 use crate::focus;
 use crate::overlay;
 use crate::settings::secrets;
-use crate::errors::{ErrorKind, ErrorPayload};
 use crate::state::{self, emit_error, events, Phase};
 use crate::stt;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -114,7 +114,10 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
     let capture = match capture::start(settings.audio.input_device.clone(), chunk_tx) {
         Ok(handle) => handle,
         Err(e) => {
-            emit_error(app, ErrorPayload::with_detail(ErrorKind::MicUnavailable, format!("{e:#}")));
+            emit_error(
+                app,
+                ErrorPayload::with_detail(ErrorKind::MicUnavailable, format!("{e:#}")),
+            );
             feedback::play(feedback::Cue::Error, settings.audio.feedback_volume);
             return;
         }
@@ -146,7 +149,8 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
         });
     }
 
-    let protocol = stt::build_protocol(&settings.stt, api_key);
+    let protocol =
+        stt::build_protocol_with_terminology(&settings.stt, &settings.terminology, api_key);
     let stt_task = tauri::async_runtime::spawn(stt::run_stream(protocol, audio_rx, event_tx));
 
     if let Ok(mut slot) = recorder.active.lock() {

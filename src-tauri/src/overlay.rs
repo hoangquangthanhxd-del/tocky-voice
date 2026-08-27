@@ -67,9 +67,8 @@ fn position_bottom_center(window: &WebviewWindow) {
     let origin = monitor.position();
 
     let x = origin.x + ((area.width as i32 - size.width as i32) / 2);
-    let y = origin.y + area.height as i32
-        - size.height as i32
-        - (BOTTOM_MARGIN_LOGICAL * scale) as i32;
+    let y =
+        origin.y + area.height as i32 - size.height as i32 - (BOTTOM_MARGIN_LOGICAL * scale) as i32;
 
     if let Err(e) = window.set_position(PhysicalPosition::new(x, y)) {
         log::debug!("could not position the overlay: {e}");
