@@ -1,0 +1,87 @@
+name: Apply Gemini LLM compatibility fix
+
+on:
+  push:
+    branches: [feature/automotive-terminology]
+    paths:
+      - ".github/workflows/fix-gemini-llm.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: feature/automotive-terminology
+
+      - name: Patch Gemini LLM defaults and migration
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace_exact(
+              'src-tauri/src/settings/defaults.rs',
+              '''            default_model: "gemini-2.5-flash",\n            models: &[\n                "gemini-2.5-flash",\n                "gemini-2.5-flash-lite",\n                "gemini-2.5-pro",\n            ],''',
+              '''            // Gemini 2.5 can return model-not-found for newly created projects.\n            // Flash-Lite is the low-latency free-tier choice for transcript cleanup.\n            default_model: "gemini-3.5-flash-lite",\n            models: &[\n                "gemini-3.5-flash-lite",\n                "gemini-3.5-flash",\n                "gemini-3.6-flash",\n            ],''',
+          )
+
+          replace_exact(
+              'src-tauri/src/settings/mod.rs',
+              '''        Ok(mut s) => {\n            restore_missing_dictation_hotkey(&mut s);\n            s\n        }''',
+              '''        Ok(mut s) => {\n            restore_missing_dictation_hotkey(&mut s);\n            migrate_legacy_gemini_models(&mut s);\n            s\n        }''',
+          )
+
+          replace_exact(
+              'src-tauri/src/settings/mod.rs',
+              '''fn restore_missing_dictation_hotkey(settings: &mut AppSettings) {\n    if settings.hotkeys.toggle.is_none() {\n        let replacement = defaults::default_hotkeys().toggle;\n        log::info!("no dictation hotkey was set; restoring the default {replacement:?}");\n        settings.hotkeys.toggle = replacement;\n    }\n}\n''',
+              '''fn restore_missing_dictation_hotkey(settings: &mut AppSettings) {\n    if settings.hotkeys.toggle.is_none() {\n        let replacement = defaults::default_hotkeys().toggle;\n        log::info!("no dictation hotkey was set; restoring the default {replacement:?}");\n        settings.hotkeys.toggle = replacement;\n    }\n}\n\n/// New Gemini projects may not have access to the legacy 2.5 model aliases. Keep\n/// existing installs working by moving only the app's old built-in Gemini choices to\n/// current free-tier models; custom model names are left untouched.\nfn migrate_legacy_gemini_models(settings: &mut AppSettings) {\n    fn migrate(llm: &mut LlmSettings) {\n        if llm.preset != "gemini" {\n            return;\n        }\n        let replacement = match llm.model.as_str() {\n            "gemini-2.5-flash" | "gemini-2.5-flash-lite" => "gemini-3.5-flash-lite",\n            "gemini-2.5-pro" => "gemini-3.5-flash",\n            _ => return,\n        };\n        log::info!("migrating Gemini LLM model {} -> {replacement}", llm.model);\n        llm.model = replacement.into();\n    }\n\n    migrate(&mut settings.llm);\n    for mode in &mut settings.modes {\n        if let Some(llm) = mode.llm_override.as_mut() {\n            migrate(llm);\n        }\n    }\n}\n''',
+          )
+
+          replace_exact(
+              'src-tauri/src/settings/mod.rs',
+              '''    #[test]\n    fn a_dictation_key_the_user_chose_themselves_is_left_alone() {''',
+              '''    #[test]\n    fn legacy_gemini_models_are_migrated_but_custom_models_are_not() {\n        let mut settings = defaults::default_settings();\n        settings.llm = LlmSettings {\n            preset: "gemini".into(),\n            model: "gemini-2.5-flash".into(),\n            base_url: None,\n            max_tokens: 2048,\n        };\n        settings.modes[0].llm_override = Some(LlmSettings {\n            preset: "gemini".into(),\n            model: "my-private-gemini-model".into(),\n            base_url: None,\n            max_tokens: 2048,\n        });\n\n        migrate_legacy_gemini_models(&mut settings);\n\n        assert_eq!(settings.llm.model, "gemini-3.5-flash-lite");\n        assert_eq!(\n            settings.modes[0].llm_override.as_ref().unwrap().model,\n            "my-private-gemini-model"\n        );\n    }\n\n    #[test]\n    fn a_dictation_key_the_user_chose_themselves_is_left_alone() {''',
+          )
+
+          replace_exact(
+              'src-tauri/src/refine/openai_compatible.rs',
+              '''        let message = payload\n            .pointer("/error/message")\n            .and_then(|m| m.as_str())\n            .unwrap_or("unknown error");\n        return Err(anyhow!("LLM API {status}: {message}"));''',
+              '''        let message = payload\n            .pointer("/error/message")\n            .or_else(|| payload.get("message"))\n            .or_else(|| payload.pointer("/error/status"))\n            .and_then(|m| m.as_str())\n            .map(str::to_owned)\n            .unwrap_or_else(|| payload.to_string());\n        return Err(anyhow!("LLM API {status}: {message}"));''',
+          )
+          PY
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: rustfmt
+
+      - name: Format Rust
+        working-directory: src-tauri
+        run: cargo fmt
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/src/settings/defaults.rs src-tauri/src/settings/mod.rs src-tauri/src/refine/openai_compatible.rs
+          git commit -m "fix: update Gemini LLM model compatibility"
+          git push origin HEAD:feature/automotive-terminology
