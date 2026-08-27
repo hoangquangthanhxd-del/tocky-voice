@@ -13,7 +13,8 @@ use crate::overlay;
 use crate::settings::secrets;
 use crate::state::{self, emit_error, events, Phase};
 use crate::stt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use crate::web_bridge;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
@@ -53,12 +54,29 @@ const AUDIBLE_PEAK: f32 = 0.01;
 /// app is restarted. Generous enough that a merely slow provider still lands.
 const FINALIZE_TIMEOUT: Duration = Duration::from_secs(20);
 
+const START_IDLE: u8 = 0;
+const STARTING: u8 = 1;
+const START_CANCELLED: u8 = 2;
+
 #[derive(Default)]
 pub struct Recorder {
+    /// Atomic reservation for synchronous setup before `active` can hold the fully
+    /// constructed take. Two entry points must never open mic/provider concurrently.
+    start_state: AtomicU8,
     active: Mutex<Option<ActiveTake>>,
     /// Present while a stopped take is still waiting on the provider. Sending on it
     /// abandons that wait — the escape hatch from a socket that never answers.
     finalizing: Mutex<Option<oneshot::Sender<()>>>,
+}
+
+struct StartReservation<'a> {
+    state: &'a AtomicU8,
+}
+
+impl Drop for StartReservation<'_> {
+    fn drop(&mut self) {
+        self.state.store(START_IDLE, Ordering::Release);
+    }
 }
 
 impl Recorder {
@@ -68,10 +86,36 @@ impl Recorder {
             .map(|slot| slot.is_some())
             .unwrap_or(false)
     }
+
+    pub fn is_busy(&self) -> bool {
+        self.start_state.load(Ordering::Acquire) != START_IDLE || self.is_recording()
+    }
+
+    fn try_reserve_start(&self) -> Option<StartReservation<'_>> {
+        self.start_state
+            .compare_exchange(START_IDLE, STARTING, Ordering::AcqRel, Ordering::Acquire)
+            .ok()?;
+        Some(StartReservation {
+            state: &self.start_state,
+        })
+    }
+
+    fn cancel_pending_start(&self) -> bool {
+        match self.start_state.compare_exchange(
+            STARTING,
+            START_CANCELLED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => true,
+            Err(START_CANCELLED) => true,
+            Err(_) => false,
+        }
+    }
 }
 
 pub fn toggle(app: &AppHandle) {
-    if app.state::<Recorder>().is_recording() {
+    if app.state::<Recorder>().is_busy() {
         stop(app);
     } else {
         start(app, None);
@@ -79,11 +123,20 @@ pub fn toggle(app: &AppHandle) {
 }
 
 /// Begins recording. `mode_id` switches mode first; `None` keeps the active one.
-/// A no-op if a take is already running, so a repeated key press is harmless.
-pub fn start(app: &AppHandle, mode_id: Option<String>) {
+/// Returns true only when this caller established the take. A concurrent start or an
+/// already-running take returns false before another microphone/provider is opened.
+pub fn start(app: &AppHandle, mode_id: Option<String>) -> bool {
     let recorder = app.state::<Recorder>();
-    if recorder.is_recording() {
-        return;
+    let Some(_start_reservation) = recorder.try_reserve_start() else {
+        return false;
+    };
+    if recorder
+        .active
+        .lock()
+        .map(|slot| slot.is_some())
+        .unwrap_or(true)
+    {
+        return false;
     }
 
     // The setup wizard's level meter holds the device open. Some Windows drivers give
@@ -107,7 +160,7 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
             ErrorPayload::with_detail(ErrorKind::NoSttKey, format!("{:?}", settings.stt.provider)),
         );
         feedback::play(feedback::Cue::Error, settings.audio.feedback_volume);
-        return;
+        return false;
     };
 
     let (chunk_tx, mut chunk_rx) = mpsc::unbounded_channel::<capture::CaptureChunk>();
@@ -119,7 +172,7 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
                 ErrorPayload::with_detail(ErrorKind::MicUnavailable, format!("{e:#}")),
             );
             feedback::play(feedback::Cue::Error, settings.audio.feedback_volume);
-            return;
+            return false;
         }
     };
 
@@ -153,18 +206,39 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
         stt::build_protocol_with_terminology(&settings.stt, &settings.terminology, api_key);
     let stt_task = tauri::async_runtime::spawn(stt::run_stream(protocol, audio_rx, event_tx));
 
-    if let Ok(mut slot) = recorder.active.lock() {
-        *slot = Some(ActiveTake {
-            capture,
-            audio_tx: Some(audio_tx),
-            cancelled: Arc::new(AtomicBool::new(false)),
-            heard_audio,
-            pcm,
-            mode_id: mode_id.clone(),
-            target_app,
-            stt_task,
-        });
+    let Ok(mut slot) = recorder.active.lock() else {
+        capture.stop();
+        stt_task.abort();
+        return false;
+    };
+    // A stop/cancel may arrive after the start reservation is taken but before the
+    // fully constructed take can be published. Check while holding `active` so there
+    // is no gap between honoring that cancellation and publishing the take.
+    if recorder.start_state.load(Ordering::Acquire) == START_CANCELLED {
+        capture.stop();
+        stt_task.abort();
+        return false;
     }
+    debug_assert!(
+        slot.is_none(),
+        "start reservation must prevent active overwrite"
+    );
+    if slot.is_some() {
+        capture.stop();
+        stt_task.abort();
+        return false;
+    }
+    *slot = Some(ActiveTake {
+        capture,
+        audio_tx: Some(audio_tx),
+        cancelled: Arc::new(AtomicBool::new(false)),
+        heard_audio,
+        pcm,
+        mode_id: mode_id.clone(),
+        target_app,
+        stt_task,
+    });
+    drop(slot);
 
     // Pump: capture thread → PCM archive + level meter → provider socket.
     //
@@ -207,17 +281,15 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
     overlay::show(app);
     feedback::play(feedback::Cue::Start, settings.audio.feedback_volume);
     state::emit_status(app, Phase::Recording, &mode_id);
+    true
 }
 
 /// Ends the take and hands the result to the transcript → refine → paste pipeline.
 pub fn stop(app: &AppHandle) {
-    let Some(mut take) = app
-        .state::<Recorder>()
-        .active
-        .lock()
-        .ok()
-        .and_then(|mut slot| slot.take())
-    else {
+    let recorder = app.state::<Recorder>();
+    let recording = recorder.active.lock().ok().and_then(|mut slot| slot.take());
+    let Some(mut take) = recording else {
+        recorder.cancel_pending_start();
         return;
     };
 
@@ -333,6 +405,11 @@ pub fn cancel(app: &AppHandle) {
         return;
     }
 
+    if recorder.cancel_pending_start() {
+        let _ = web_bridge::deliver_cancelled(app);
+        return;
+    }
+
     // Nothing recording: there may still be a stopped take waiting on the provider.
     // The finalize task owns the state, so it is told to give up and does the rest.
     if let Some(abort) = recorder.finalizing.lock().ok().and_then(|mut s| s.take()) {
@@ -343,6 +420,7 @@ pub fn cancel(app: &AppHandle) {
 /// The shared ending of an abandoned take: no text, no error, back to idle.
 fn abandon(app: &AppHandle, mode_id: &str) {
     let settings = state::settings_snapshot(app);
+    let _ = web_bridge::deliver_cancelled(app);
     overlay::hide(app);
     feedback::play(feedback::Cue::Cancel, settings.audio.feedback_volume);
     let _ = app.emit(events::PARTIAL, String::new());
@@ -381,4 +459,43 @@ pub fn set_active_mode(app: &AppHandle, mode_id: &str) {
     }
     let _ = app.emit(events::SETTINGS_CHANGED, ());
     state::emit_status(app, Phase::Idle, mode_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn start_reservation_is_exclusive() {
+        let recorder = Recorder::default();
+        let first = recorder
+            .try_reserve_start()
+            .expect("first caller should reserve start");
+        assert!(recorder.is_busy());
+        assert!(recorder.try_reserve_start().is_none());
+        drop(first);
+        assert!(!recorder.is_busy());
+        assert!(recorder.try_reserve_start().is_some());
+    }
+
+    #[test]
+    fn pending_start_cancellation_cannot_be_reset_by_another_start() {
+        let recorder = Recorder::default();
+        let first = recorder
+            .try_reserve_start()
+            .expect("first caller should reserve start");
+        assert!(recorder.cancel_pending_start());
+        assert_eq!(
+            recorder.start_state.load(Ordering::Acquire),
+            START_CANCELLED
+        );
+        assert!(recorder.try_reserve_start().is_none());
+        assert_eq!(
+            recorder.start_state.load(Ordering::Acquire),
+            START_CANCELLED
+        );
+        drop(first);
+        assert_eq!(recorder.start_state.load(Ordering::Acquire), START_IDLE);
+        assert!(!recorder.is_busy());
+    }
 }

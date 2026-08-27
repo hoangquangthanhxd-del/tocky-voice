@@ -97,7 +97,7 @@ pub fn list_input_devices() -> Vec<String> {
 /// carries sound before the user gets as far as needing an API key.
 #[tauri::command]
 pub fn start_mic_test(app: AppHandle, device: Option<String>) -> Result<(), String> {
-    if app.state::<session::Recorder>().is_recording() {
+    if app.state::<session::Recorder>().is_busy() {
         return Err("a dictation is already running".into());
     }
     mic_test::start(&app, device).map_err(to_err)

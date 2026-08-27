@@ -22,6 +22,7 @@ mod session;
 mod state;
 mod terminology;
 mod tray;
+mod web_bridge;
 
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
@@ -30,7 +31,20 @@ use tauri_plugin_autostart::MacosLauncher;
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    // Deep links on Windows/Linux launch a second process. This plugin must be first so
+    // the URL is forwarded to the already-running instance before any other plugin can
+    // consume or interfere with startup arguments.
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, argv, _cwd| {
+            log::debug!("secondary Tocky instance forwarded arguments: {argv:?}");
+        }));
+    }
+
+    builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_autostart::init(
@@ -51,6 +65,7 @@ pub fn run() {
                 .build(),
         )
         .manage(session::Recorder::default())
+        .manage(web_bridge::WebBridge::default())
         .manage(hotkeys::HotkeyRegistry::default())
         .manage(audio::mic_test::MicTest::default())
         .setup(|app| {
@@ -98,6 +113,33 @@ pub fn run() {
             app.manage(state::AppState::new(settings.clone()));
             hotkeys::apply(&handle, &settings);
             tray::build(&handle, &settings)?;
+
+            // The localhost bridge is independent of settings/UI startup. Binding errors
+            // are logged by the task and never prevent normal hotkey dictation.
+            web_bridge::start(&handle);
+
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+
+                // Installed desktop bundles register the configured scheme. During
+                // Windows/Linux development register it for the current executable too.
+                #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+                app.deep_link().register_all()?;
+
+                if let Some(urls) = app.deep_link().get_current()? {
+                    for url in urls {
+                        web_bridge::handle_deep_link(&handle, url.as_str());
+                    }
+                }
+
+                let deep_link_handle = handle.clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        web_bridge::handle_deep_link(&deep_link_handle, url.as_str());
+                    }
+                });
+            }
 
             // Under the Accessory activation policy the app never activates on its own,
             // so the settings window would open behind everything else. Ask for focus

@@ -101,7 +101,9 @@ pub fn on_shortcut(app: &AppHandle, shortcut: &Shortcut, state: ShortcutState) {
         (HotkeyAction::Toggle, _) => session::toggle(app),
         (HotkeyAction::Cancel, _) => session::cancel(app),
         (HotkeyAction::NextMode, _) => session::next_mode(app),
-        (HotkeyAction::SelectMode(mode_id), _) => session::start(app, Some(mode_id)),
+        (HotkeyAction::SelectMode(mode_id), _) => {
+            session::start(app, Some(mode_id));
+        }
     }
 }
 
