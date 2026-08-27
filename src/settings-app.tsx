@@ -52,11 +52,29 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 const SAVE_DEBOUNCE_MS = 400;
+const SETTINGS_LOAD_ATTEMPTS = 20;
+const SETTINGS_LOAD_RETRY_MS = 250;
+
+async function getSettingsWithRetry(): Promise<AppSettings> {
+  let lastError: unknown = new Error("settings unavailable");
+  for (let attempt = 0; attempt < SETTINGS_LOAD_ATTEMPTS; attempt += 1) {
+    try {
+      return await api.getSettings();
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < SETTINGS_LOAD_ATTEMPTS) {
+        await new Promise((resolve) => window.setTimeout(resolve, SETTINGS_LOAD_RETRY_MS));
+      }
+    }
+  }
+  throw lastError;
+}
 
 export function SettingsApp() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [section, setSection] = useState<SectionId>("dictate");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [presets, setPresets] = useState<LlmPreset[]>([]);
   const [version, setVersion] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -73,6 +91,19 @@ export function SettingsApp() {
   // by hotkey), so an inbound update is not echoed straight back.
   const dirty = useRef(false);
 
+  const loadSettings = useCallback(() => {
+    setLoadError(null);
+    return getSettingsWithRetry()
+      .then((next) => {
+        setSettings(next);
+        setLoadError(null);
+      })
+      .catch((error) => {
+        console.error("failed to load settings", error);
+        setLoadError(String(error));
+      });
+  }, []);
+
   useEffect(() => {
     getVersion().then((v) => {
       setVersion(v);
@@ -80,16 +111,16 @@ export function SettingsApp() {
       // spot people actually glance at, so it carries the version too.
       getCurrentWindow().setTitle(`Tocky Voice Automotive v${v}`).catch(() => undefined);
     }).catch(() => undefined);
-    api.getSettings().then(setSettings).catch(() => undefined);
+    void loadSettings();
     api.listLlmPresets().then(setPresets).catch(() => undefined);
     const off = listen(api.EVENTS.settingsChanged, () => {
       if (dirty.current) return;
-      api.getSettings().then(setSettings).catch(() => undefined);
+      void loadSettings();
     });
     return () => {
       off.then((fn) => fn()).catch(() => undefined);
     };
-  }, []);
+  }, [loadSettings]);
 
   const update = useCallback((next: AppSettings) => {
     dirty.current = true;
@@ -106,7 +137,22 @@ export function SettingsApp() {
     }, SAVE_DEBOUNCE_MS);
   }, []);
 
-  if (!settings) return <div className="loading">{t.nav.loading}</div>;
+  if (!settings) {
+    return (
+      <div className="loading">
+        {loadError ? (
+          <>
+            <div>Could not load settings: {loadError}</div>
+            <button type="button" onClick={() => void loadSettings()}>
+              Retry
+            </button>
+          </>
+        ) : (
+          t.nav.loading
+        )}
+      </div>
+    );
+  }
 
   // Shown over everything: on a fresh install none of the tabs behind it can do
   // anything useful until the walkthrough's steps are done anyway.
