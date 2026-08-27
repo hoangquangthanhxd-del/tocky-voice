@@ -1,0 +1,60 @@
+name: Apply Gemini STT probe diagnostics
+
+on:
+  push:
+    branches:
+      - feature/automotive-terminology
+    paths:
+      - .github/workflows/fix-gemini-stt-probe.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feature/automotive-terminology
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          components: rustfmt
+      - shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace_exact(
+              'src-tauri/src/stt/mod.rs',
+              'const SETUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);',
+              'const SETUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);',
+          )
+
+          replace_exact(
+              'src-tauri/src/commands.rs',
+              '''    let Some(api_key) = secrets::get_key(account) else {\n        return Err(format!("no key saved for {account}"));\n    };\n    crate::stt::probe(&stt, api_key).await.map_err(to_err)''',
+              '''    let Some(api_key) = secrets::get_key(account) else {\n        return Err(format!("no key saved for {account}"));\n    };\n    // Gemini's Live WebSocket can accept the HTTP upgrade and then stay silent when\n    // the credential is unusable. Validate the same key against Google's REST API\n    // first so Settings reports the real credential error instead of a setup timeout.\n    if matches!(stt.provider, settings::SttProviderKind::Gemini) {\n        crate::stt::gemini::validate_api_key(&api_key)\n            .await\n            .map_err(to_err)?;\n    }\n    crate::stt::probe(&stt, api_key).await.map_err(to_err)''',
+          )
+
+          marker = '''impl WsProtocol for Gemini {\n'''
+          addition = '''/// Validates a Gemini API key before opening the Live WebSocket.\n///\n/// The Live endpoint can complete the WebSocket upgrade without ever sending the\n/// application-level setup acknowledgement for an unusable credential. The ordinary\n/// REST models endpoint gives a precise Google API error, which is much more useful in\n/// Settings than a generic setup timeout.\npub async fn validate_api_key(api_key: &str) -> Result<()> {\n    let client = reqwest::Client::builder()\n        .timeout(std::time::Duration::from_secs(8))\n        .build()?;\n    let response = client\n        .get("https://generativelanguage.googleapis.com/v1beta/models")\n        .query(&[("pageSize", "1"), ("key", api_key)])\n        .send()\n        .await?;\n    let status = response.status();\n    let payload: Value = response.json().await?;\n    if status.is_success() {\n        return Ok(());\n    }\n\n    let message = payload\n        .pointer("/error/message")\n        .and_then(Value::as_str)\n        .unwrap_or("Google rejected the API key");\n    let google_status = payload\n        .pointer("/error/status")\n        .and_then(Value::as_str)\n        .unwrap_or("UNKNOWN");\n    Err(anyhow!(\n        "Gemini API key check failed: {message} ({status}, {google_status})"\n    ))\n}\n\nimpl WsProtocol for Gemini {\n'''
+          replace_exact('src-tauri/src/stt/gemini.rs', marker, addition)
+          PY
+          cargo fmt --manifest-path src-tauri/Cargo.toml
+          git diff --check
+      - shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/src/stt/mod.rs src-tauri/src/stt/gemini.rs src-tauri/src/commands.rs
+          git commit -m "fix: diagnose Gemini STT credentials before live setup"
+          git push origin HEAD:feature/automotive-terminology
