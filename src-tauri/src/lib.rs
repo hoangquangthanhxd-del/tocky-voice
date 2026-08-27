@@ -21,6 +21,7 @@ mod private_file;
 mod session;
 mod tray;
 mod state;
+mod terminology;
 
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;

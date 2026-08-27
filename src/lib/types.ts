@@ -48,8 +48,24 @@ export interface HistorySettings {
   audio_retention_days: number;
 }
 
+export interface TerminologyEntry {
+  canonical: string;
+  aliases: string[];
+  enabled: boolean;
+  priority: number;
+  source: string | null;
+  provider_hint: boolean;
+}
+
+export interface TerminologySettings {
+  enabled: boolean;
+  send_to_stt: boolean;
+  entries: TerminologyEntry[];
+}
+
 export interface AppSettings {
   stt: SttSettings;
+  terminology: TerminologySettings;
   llm: LlmSettings;
   modes: Mode[];
   active_mode_id: string;

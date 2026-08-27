@@ -14,19 +14,25 @@ pub struct Deepgram {
     api_key: String,
     model: String,
     language: String,
+    terms: Vec<String>,
 }
 
 impl Deepgram {
     pub fn new(settings: &SttSettings, api_key: String) -> Self {
+        Self::with_terms(settings, api_key, Vec::new())
+    }
+
+    pub fn with_terms(settings: &SttSettings, api_key: String, terms: Vec<String>) -> Self {
         Self {
             api_key,
             model: settings.deepgram_model.clone(),
             language: settings.language.clone(),
+            terms,
         }
     }
 
     fn url(&self) -> String {
-        format!(
+        let mut url = format!(
             "wss://api.deepgram.com/v1/listen\
              ?model={model}&language={language}\
              &encoding=linear16&sample_rate={rate}&channels=1\
@@ -34,7 +40,13 @@ impl Deepgram {
             model = urlencoding::encode(&self.model),
             language = urlencoding::encode(&self.language),
             rate = TARGET_SAMPLE_RATE,
-        )
+        );
+        for term in &self.terms {
+            url.push_str("&keywords=");
+            url.push_str(&urlencoding::encode(term));
+            url.push_str(":1.5");
+        }
+        url
     }
 }
 

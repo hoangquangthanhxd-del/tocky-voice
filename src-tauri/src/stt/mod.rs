@@ -10,7 +10,7 @@ pub mod deepgram;
 pub mod soniox;
 
 use crate::audio::capture::TARGET_SAMPLE_RATE;
-use crate::settings::{SttProviderKind, SttSettings};
+use crate::settings::{SttProviderKind, SttSettings, TerminologySettings};
 use anyhow::{anyhow, Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -71,9 +71,18 @@ pub trait WsProtocol: Send {
 }
 
 pub fn build_protocol(settings: &SttSettings, api_key: String) -> Box<dyn WsProtocol> {
+    build_protocol_with_terminology(settings, &TerminologySettings::default(), api_key)
+}
+
+pub fn build_protocol_with_terminology(
+    settings: &SttSettings,
+    terminology_settings: &TerminologySettings,
+    api_key: String,
+) -> Box<dyn WsProtocol> {
+    let terms = crate::terminology::stt_terms(terminology_settings, 100);
     match settings.provider {
-        SttProviderKind::Soniox => Box::new(soniox::Soniox::new(settings, api_key)),
-        SttProviderKind::Deepgram => Box::new(deepgram::Deepgram::new(settings, api_key)),
+        SttProviderKind::Soniox => Box::new(soniox::Soniox::with_terms(settings, api_key, terms)),
+        SttProviderKind::Deepgram => Box::new(deepgram::Deepgram::with_terms(settings, api_key, terms)),
         SttProviderKind::AssemblyAi => Box::new(assemblyai::AssemblyAi::new(api_key)),
     }
 }

@@ -146,7 +146,7 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
         });
     }
 
-    let protocol = stt::build_protocol(&settings.stt, api_key);
+    let protocol = stt::build_protocol_with_terminology(&settings.stt, &settings.terminology, api_key);
     let stt_task = tauri::async_runtime::spawn(stt::run_stream(protocol, audio_rx, event_tx));
 
     if let Ok(mut slot) = recorder.active.lock() {

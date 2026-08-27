@@ -108,9 +108,46 @@ pub struct HistorySettings {
     pub audio_retention_days: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TerminologyEntry {
+    pub canonical: String,
+    pub aliases: Vec<String>,
+    /// Lets users temporarily disable a mapping without deleting it.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// User-created terms default above bundled seed terms, so they win provider caps.
+    #[serde(default = "default_user_term_priority")]
+    pub priority: i32,
+    /// Provenance for bundled/imported terms; user-created entries normally leave this empty.
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Whether this canonical form is also sent to the speech provider as a recognition hint.
+    #[serde(default = "default_true")]
+    pub provider_hint: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TerminologySettings {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub send_to_stt: bool,
+    #[serde(default)]
+    pub entries: Vec<TerminologyEntry>,
+}
+
+impl Default for TerminologySettings {
+    fn default() -> Self {
+        Self { enabled: true, send_to_stt: true, entries: Vec::new() }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub stt: SttSettings,
+    /// Domain vocabulary and deterministic transcript replacements.
+    #[serde(default = "defaults::default_terminology_settings")]
+    pub terminology: TerminologySettings,
     pub llm: LlmSettings,
     pub modes: Vec<Mode>,
     pub active_mode_id: String,
@@ -147,6 +184,10 @@ fn default_ui_language() -> String {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_user_term_priority() -> i32 {
+    2_000
 }
 
 /// Every credential name the app can store, for backend migration.
@@ -275,6 +316,16 @@ mod tests {
         restore_missing_dictation_hotkey(&mut settings);
 
         assert_eq!(settings.hotkeys.toggle, defaults::default_hotkeys().toggle);
+    }
+
+    #[test]
+    fn settings_from_before_terminology_receive_the_ptap_seed() {
+        let mut raw = serde_json::to_value(defaults::default_settings()).unwrap();
+        raw.as_object_mut().unwrap().remove("terminology");
+
+        let parsed: AppSettings = serde_json::from_value(raw).unwrap();
+
+        assert_eq!(parsed.terminology.entries.len(), 100);
     }
 
     #[test]

@@ -1,0 +1,929 @@
+[
+  {
+    "canonical": "XO",
+    "aliases": [
+      "X O"
+    ],
+    "enabled": true,
+    "priority": 1000,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "XO40K",
+    "aliases": [
+      "XO 40 K",
+      "X O 40 K"
+    ],
+    "enabled": true,
+    "priority": 999,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MPU-K300",
+    "aliases": [
+      "MPU K300",
+      "MPU K 300",
+      "M P U K 300"
+    ],
+    "enabled": true,
+    "priority": 998,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MTBX_GT-DSX",
+    "aliases": [
+      "MTBX GT DSX",
+      "M T B X G T D S X"
+    ],
+    "enabled": true,
+    "priority": 997,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "PVN12462",
+    "aliases": [
+      "PVN 12462",
+      "P V N 12462"
+    ],
+    "enabled": true,
+    "priority": 996,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "PVN13956",
+    "aliases": [
+      "PVN 13956",
+      "P V N 13956"
+    ],
+    "enabled": true,
+    "priority": 995,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "10303 Lafien",
+    "aliases": [],
+    "enabled": true,
+    "priority": 994,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MTBX_GT-DSTQ",
+    "aliases": [
+      "MTBX GT DSTQ",
+      "M T B X G T D S T Q"
+    ],
+    "enabled": true,
+    "priority": 993,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BKR5EYA-11",
+    "aliases": [
+      "BKR5EYA 11",
+      "BKR 5 EYA 11",
+      "B K R 5 E Y A 11"
+    ],
+    "enabled": true,
+    "priority": 992,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "GIP-501DY",
+    "aliases": [
+      "GIP 501DY",
+      "GIP 501 DY",
+      "G I P 501 D Y"
+    ],
+    "enabled": true,
+    "priority": 991,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MTBX_GT-BX",
+    "aliases": [
+      "MTBX GT BX",
+      "M T B X G T B X"
+    ],
+    "enabled": true,
+    "priority": 990,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MTBX_GT-KC",
+    "aliases": [
+      "MTBX GT KC",
+      "M T B X G T K C"
+    ],
+    "enabled": true,
+    "priority": 989,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MTBX_GT-LUC",
+    "aliases": [
+      "MTBX GT LUC",
+      "M T B X G T L U C"
+    ],
+    "enabled": true,
+    "priority": 988,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MPU-118 23220-75040/0C050",
+    "aliases": [
+      "MPU 118 23220 75040 0C050",
+      "MPU 118 23220 75040 0 C 050",
+      "M P U 118 23220 75040 0 C 050"
+    ],
+    "enabled": true,
+    "priority": 987,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "PK20TT",
+    "aliases": [
+      "PK 20 TT",
+      "P K 20 T T"
+    ],
+    "enabled": true,
+    "priority": 986,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "65x90x13",
+    "aliases": [
+      "65 x 90 x 13"
+    ],
+    "enabled": true,
+    "priority": 985,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "K20TT",
+    "aliases": [
+      "K 20 TT",
+      "K 20 T T"
+    ],
+    "enabled": true,
+    "priority": 984,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "SA045",
+    "aliases": [
+      "SA 045",
+      "S A 045"
+    ],
+    "enabled": true,
+    "priority": 983,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "SA045HQ",
+    "aliases": [
+      "SA 045 HQ",
+      "S A 045 H Q"
+    ],
+    "enabled": true,
+    "priority": 982,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "IK20TT",
+    "aliases": [
+      "IK 20 TT",
+      "I K 20 T T"
+    ],
+    "enabled": true,
+    "priority": 981,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "13T0138B",
+    "aliases": [
+      "13 T 0138 B"
+    ],
+    "enabled": true,
+    "priority": 980,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "90919T1002-XIN TOYOTA INDO 90919-T1002",
+    "aliases": [
+      "90919T1002 XIN TOYOTA INDO 90919 T1002",
+      "90919 T 1002 XIN TOYOTA INDO 90919 T 1002"
+    ],
+    "enabled": true,
+    "priority": 979,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "97311x4",
+    "aliases": [
+      "97311 x 4"
+    ],
+    "enabled": true,
+    "priority": 978,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BKR6EGP 97311",
+    "aliases": [
+      "BKR 6 EGP 97311",
+      "B K R 6 E G P 97311"
+    ],
+    "enabled": true,
+    "priority": 977,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BRT1002-HOP",
+    "aliases": [
+      "BRT1002 HOP",
+      "BRT 1002 HOP",
+      "B R T 1002 HOP"
+    ],
+    "enabled": true,
+    "priority": 976,
+    "source": "ptap_sku",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BURI CHÂN NGẮN GIẮC 16",
+    "aliases": [
+      "bu ri chân ngắn giắc 16"
+    ],
+    "enabled": true,
+    "priority": 900,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "Mô tơ bơm xăng GIM TO",
+    "aliases": [],
+    "enabled": true,
+    "priority": 899,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BURI HD KIA M12 T16 CHÂN DÀI",
+    "aliases": [
+      "bu ri hd kia m 12 t 16 chân dài"
+    ],
+    "enabled": true,
+    "priority": 898,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "XE ÔM",
+    "aliases": [],
+    "enabled": true,
+    "priority": 897,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MÁ PHANH SAU GUỐC SA045",
+    "aliases": [],
+    "enabled": true,
+    "priority": 896,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BURI CHÂN DÀI M12 T14 TẦM NHIỆT = 6",
+    "aliases": [
+      "bu ri chân dài m 12 t 14 tầm nhiệt 6"
+    ],
+    "enabled": true,
+    "priority": 895,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "LÁ CÔN F10A",
+    "aliases": [],
+    "enabled": true,
+    "priority": 894,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "Lọc nhớt 10303",
+    "aliases": [],
+    "enabled": true,
+    "priority": 893,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ROTUYN LÁI NGANG $22",
+    "aliases": [],
+    "enabled": true,
+    "priority": 892,
+    "source": "ptap_product_name",
+    "provider_hint": false
+  },
+  {
+    "canonical": "LỌC DẦU M12X1.25 2E900 D3900",
+    "aliases": [
+      "LỌC DẦU M12X1 25 2E900 D3900"
+    ],
+    "enabled": true,
+    "priority": 891,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MÂM ÉP F10A $18 CM LỒI",
+    "aliases": [],
+    "enabled": true,
+    "priority": 890,
+    "source": "ptap_product_name",
+    "provider_hint": false
+  },
+  {
+    "canonical": "BURI SUZUKI K14",
+    "aliases": [
+      "bu ri suzuki k 14"
+    ],
+    "enabled": true,
+    "priority": 889,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ẮC BẠC TRỤ ĐỨNG KIA FRONTIER",
+    "aliases": [],
+    "enabled": true,
+    "priority": 888,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "HEO BÁNH TRƯỚC (1 PISTON)",
+    "aliases": [],
+    "enabled": true,
+    "priority": 887,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MÁ PHANH D2253",
+    "aliases": [],
+    "enabled": true,
+    "priority": 886,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "GIẢM XÓC TRƯỚC THACO",
+    "aliases": [],
+    "enabled": true,
+    "priority": 885,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CAO SU CÀNG A TO",
+    "aliases": [],
+    "enabled": true,
+    "priority": 884,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MÁ PHANH SP1401",
+    "aliases": [],
+    "enabled": true,
+    "priority": 883,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MÁ PHANH TRƯỚC SP1399",
+    "aliases": [],
+    "enabled": true,
+    "priority": 882,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ROTUYN CÂN BẰNG TRƯỚC $12 Z L283 TÂM",
+    "aliases": [],
+    "enabled": true,
+    "priority": 881,
+    "source": "ptap_product_name",
+    "provider_hint": false
+  },
+  {
+    "canonical": "ROTUYN CÂN BẰNG TRƯỚC",
+    "aliases": [],
+    "enabled": true,
+    "priority": 880,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BƠM XĂNG GIM TO MPU-K300",
+    "aliases": [
+      "BƠM XĂNG GIM TO MPU K300"
+    ],
+    "enabled": true,
+    "priority": 879,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BI 6207-2RS",
+    "aliases": [
+      "BI 6207 2RS"
+    ],
+    "enabled": true,
+    "priority": 878,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CÀNG I TOWNER 950 990",
+    "aliases": [],
+    "enabled": true,
+    "priority": 877,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "LÁ CÔN KD-31",
+    "aliases": [
+      "LÁ CÔN KD 31"
+    ],
+    "enabled": true,
+    "priority": 876,
+    "source": "ptap_product_name",
+    "provider_hint": true
+  },
+  {
+    "canonical": "TRANSIT",
+    "aliases": [],
+    "enabled": true,
+    "priority": 850,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "I10",
+    "aliases": [
+      "i 10"
+    ],
+    "enabled": true,
+    "priority": 849,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ISUZU",
+    "aliases": [],
+    "enabled": true,
+    "priority": 848,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CIVIC",
+    "aliases": [],
+    "enabled": true,
+    "priority": 847,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "k2700",
+    "aliases": [
+      "k 2700"
+    ],
+    "enabled": true,
+    "priority": 846,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "NAVARA",
+    "aliases": [],
+    "enabled": true,
+    "priority": 845,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "KENBO",
+    "aliases": [],
+    "enabled": true,
+    "priority": 844,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "K3000",
+    "aliases": [
+      "k 3000"
+    ],
+    "enabled": true,
+    "priority": 843,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "VIOS08",
+    "aliases": [
+      "vios 08"
+    ],
+    "enabled": true,
+    "priority": 842,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "VIOS14",
+    "aliases": [
+      "vios 14"
+    ],
+    "enabled": true,
+    "priority": 841,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ranger",
+    "aliases": [],
+    "enabled": true,
+    "priority": 840,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CAMRY",
+    "aliases": [],
+    "enabled": true,
+    "priority": 839,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MORNING",
+    "aliases": [],
+    "enabled": true,
+    "priority": 838,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "COUNTY",
+    "aliases": [],
+    "enabled": true,
+    "priority": 837,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MATIZ",
+    "aliases": [],
+    "enabled": true,
+    "priority": 836,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ELANTRA",
+    "aliases": [],
+    "enabled": true,
+    "priority": 835,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CRUZE",
+    "aliases": [],
+    "enabled": true,
+    "priority": 834,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ORLANDO",
+    "aliases": [],
+    "enabled": true,
+    "priority": 833,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "GIMTO",
+    "aliases": [],
+    "enabled": true,
+    "priority": 832,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "PAJEROV93",
+    "aliases": [
+      "pajero v93",
+      "pajero v 93",
+      "PAJEROV 93"
+    ],
+    "enabled": true,
+    "priority": 831,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CERATO",
+    "aliases": [],
+    "enabled": true,
+    "priority": 830,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "K3",
+    "aliases": [
+      "k 3"
+    ],
+    "enabled": true,
+    "priority": 829,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "AVANTE",
+    "aliases": [],
+    "enabled": true,
+    "priority": 828,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "I30",
+    "aliases": [
+      "i 30"
+    ],
+    "enabled": true,
+    "priority": 827,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CARENS",
+    "aliases": [],
+    "enabled": true,
+    "priority": 826,
+    "source": "ptap_vehicle",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ROTUYN",
+    "aliases": [
+      "ro tuyn",
+      "rô tuyn"
+    ],
+    "enabled": true,
+    "priority": 800,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "VÒNG BI",
+    "aliases": [],
+    "enabled": true,
+    "priority": 799,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "MÁ PHANH ĐĨA",
+    "aliases": [],
+    "enabled": true,
+    "priority": 798,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "PHỚT",
+    "aliases": [
+      "phốt"
+    ],
+    "enabled": true,
+    "priority": 797,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CUROA",
+    "aliases": [
+      "cu roa",
+      "cua roa",
+      "cu-roa"
+    ],
+    "enabled": true,
+    "priority": 796,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CAO SU CÀNG A, CAO SU GIẰNG, CAO SU CHÂN GIẢM XÓC",
+    "aliases": [],
+    "enabled": true,
+    "priority": 795,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "GIẢM XÓC (PHUỘC)",
+    "aliases": [],
+    "enabled": true,
+    "priority": 794,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "LỌC NHỚT",
+    "aliases": [],
+    "enabled": true,
+    "priority": 793,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "LỌC GIÓ ĐỘNG CƠ",
+    "aliases": [],
+    "enabled": true,
+    "priority": 792,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "HEO BÁNH, XI LANH PHANH SAU, BẦU PHANH SAU",
+    "aliases": [],
+    "enabled": true,
+    "priority": 791,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "THƯỚC LÁI + TRỤC LÁI + TRỤC CÁC ĐĂNG + KHỚP TRUYỀN LÁI + BẠC THƯỚC LÁI + BẠT THƯỚC LÁI",
+    "aliases": [],
+    "enabled": true,
+    "priority": 790,
+    "source": "ptap_product_category",
+    "provider_hint": false
+  },
+  {
+    "canonical": "MÁ PHANH CÀNG",
+    "aliases": [],
+    "enabled": true,
+    "priority": 789,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "PISTON PHANH",
+    "aliases": [],
+    "enabled": true,
+    "priority": 788,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "LỌC XĂNG",
+    "aliases": [],
+    "enabled": true,
+    "priority": 787,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "LÁ CÔN",
+    "aliases": [],
+    "enabled": true,
+    "priority": 786,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "Mâm ép Bàn ép",
+    "aliases": [],
+    "enabled": true,
+    "priority": 785,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "LỌC DẦU",
+    "aliases": [],
+    "enabled": true,
+    "priority": 784,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BUGI",
+    "aliases": [
+      "bu gi"
+    ],
+    "enabled": true,
+    "priority": 783,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ĐẦU LÁP - CÂY LÁP TRƯỚC",
+    "aliases": [
+      "ĐẦU LÁP CÂY LÁP TRƯỚC"
+    ],
+    "enabled": true,
+    "priority": 782,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ỐNG NƯỚC",
+    "aliases": [],
+    "enabled": true,
+    "priority": 781,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ROĂNG QUY LÁT",
+    "aliases": [
+      "gioăng quy lát",
+      "ron quy lát"
+    ],
+    "enabled": true,
+    "priority": 780,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "CHỔI GẠT MƯA",
+    "aliases": [],
+    "enabled": true,
+    "priority": 779,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BƠM NƯỚC",
+    "aliases": [],
+    "enabled": true,
+    "priority": 778,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "ROĂNG GIÀN CÒ - NẮP GIÀN CÒ",
+    "aliases": [
+      "gioăng giàn cò nắp giàn cò",
+      "ron giàn cò nắp giàn cò",
+      "ROĂNG GIÀN CÒ NẮP GIÀN CÒ"
+    ],
+    "enabled": true,
+    "priority": 777,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  },
+  {
+    "canonical": "BI TÊ, ỐNG XẢ E BITE",
+    "aliases": [],
+    "enabled": true,
+    "priority": 776,
+    "source": "ptap_product_category",
+    "provider_hint": true
+  }
+]

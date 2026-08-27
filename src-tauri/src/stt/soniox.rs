@@ -17,14 +17,20 @@ pub struct Soniox {
     api_key: String,
     model: String,
     language_hints: Vec<String>,
+    terms: Vec<String>,
 }
 
 impl Soniox {
     pub fn new(settings: &SttSettings, api_key: String) -> Self {
+        Self::with_terms(settings, api_key, Vec::new())
+    }
+
+    pub fn with_terms(settings: &SttSettings, api_key: String, terms: Vec<String>) -> Self {
         Self {
             api_key,
             model: settings.soniox_model.clone(),
             language_hints: settings.language_hints.clone(),
+            terms,
         }
     }
 }
@@ -37,7 +43,7 @@ impl WsProtocol for Soniox {
     }
 
     fn init_message(&self) -> Option<Message> {
-        let config = json!({
+        let mut config = json!({
             "api_key": self.api_key,
             "model": self.model,
             "audio_format": "pcm_s16le",
@@ -47,6 +53,9 @@ impl WsProtocol for Soniox {
             "enable_language_identification": true,
             "enable_endpoint_detection": true,
         });
+        if !self.terms.is_empty() {
+            config["context"] = json!({ "terms": &self.terms });
+        }
         Some(Message::Text(config.to_string()))
     }
 
