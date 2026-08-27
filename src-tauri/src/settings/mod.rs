@@ -248,6 +248,7 @@ pub fn load(app: &AppHandle) -> AppSettings {
     match serde_json::from_str::<AppSettings>(&raw) {
         Ok(mut s) => {
             restore_missing_dictation_hotkey(&mut s);
+            migrate_legacy_gemini_models(&mut s);
             s
         }
         Err(e) => {
@@ -269,6 +270,31 @@ fn restore_missing_dictation_hotkey(settings: &mut AppSettings) {
         let replacement = defaults::default_hotkeys().toggle;
         log::info!("no dictation hotkey was set; restoring the default {replacement:?}");
         settings.hotkeys.toggle = replacement;
+    }
+}
+
+/// New Gemini projects may not have access to the legacy 2.5 model aliases. Keep
+/// existing installs working by moving only the app's old built-in Gemini choices to
+/// current free-tier models; custom model names are left untouched.
+fn migrate_legacy_gemini_models(settings: &mut AppSettings) {
+    fn migrate(llm: &mut LlmSettings) {
+        if llm.preset != "gemini" {
+            return;
+        }
+        let replacement = match llm.model.as_str() {
+            "gemini-2.5-flash" | "gemini-2.5-flash-lite" => "gemini-3.5-flash-lite",
+            "gemini-2.5-pro" => "gemini-3.5-flash",
+            _ => return,
+        };
+        log::info!("migrating Gemini LLM model {} -> {replacement}", llm.model);
+        llm.model = replacement.into();
+    }
+
+    migrate(&mut settings.llm);
+    for mode in &mut settings.modes {
+        if let Some(llm) = mode.llm_override.as_mut() {
+            migrate(llm);
+        }
     }
 }
 
@@ -333,6 +359,31 @@ mod tests {
         let parsed: AppSettings = serde_json::from_value(raw).unwrap();
 
         assert!(parsed.terminology.entries.is_empty());
+    }
+
+    #[test]
+    fn legacy_gemini_models_are_migrated_but_custom_models_are_not() {
+        let mut settings = defaults::default_settings();
+        settings.llm = LlmSettings {
+            preset: "gemini".into(),
+            model: "gemini-2.5-flash".into(),
+            base_url: None,
+            max_tokens: 2048,
+        };
+        settings.modes[0].llm_override = Some(LlmSettings {
+            preset: "gemini".into(),
+            model: "my-private-gemini-model".into(),
+            base_url: None,
+            max_tokens: 2048,
+        });
+
+        migrate_legacy_gemini_models(&mut settings);
+
+        assert_eq!(settings.llm.model, "gemini-3.5-flash-lite");
+        assert_eq!(
+            settings.modes[0].llm_override.as_ref().unwrap().model,
+            "my-private-gemini-model"
+        );
     }
 
     #[test]

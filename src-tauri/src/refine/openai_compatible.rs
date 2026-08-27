@@ -53,8 +53,11 @@ pub async fn complete(
     if !status.is_success() {
         let message = payload
             .pointer("/error/message")
+            .or_else(|| payload.get("message"))
+            .or_else(|| payload.pointer("/error/status"))
             .and_then(|m| m.as_str())
-            .unwrap_or("unknown error");
+            .map(str::to_owned)
+            .unwrap_or_else(|| payload.to_string());
         return Err(anyhow!("LLM API {status}: {message}"));
     }
 
