@@ -29,6 +29,13 @@ export const ModesIcon = ({ className }: Props) => (
   </svg>
 );
 
+export const BookIcon = ({ className }: Props) => (
+  <svg {...base} className={className} aria-hidden="true">
+    <path d="M2.5 2.5h4.25A2.25 2.25 0 0 1 9 4.75v8.5a2.25 2.25 0 0 0-2.25-2.25H2.5z" />
+    <path d="M13.5 2.5H9.25A2.25 2.25 0 0 0 7 4.75v8.5A2.25 2.25 0 0 1 9.25 11h4.25z" />
+  </svg>
+);
+
 export const KeyIcon = ({ className }: Props) => (
   <svg {...base} className={className} aria-hidden="true">
     <rect x="1.75" y="3.25" width="12.5" height="9.5" rx="1.8" />

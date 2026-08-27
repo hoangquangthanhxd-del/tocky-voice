@@ -25,9 +25,11 @@ import { DictationPanel } from "./components/dictation-panel";
 import { HistoryList } from "./components/history-list";
 import { ModesEditor } from "./components/modes-editor";
 import { ProvidersEditor } from "./components/providers-editor";
+import { TerminologyEditor } from "./components/terminology-editor";
 import { AboutPanel } from "./components/about-panel";
 import { UpdateBanner } from "./components/update-banner";
 import {
+  BookIcon,
   InfoIcon,
   KeyIcon,
   LogIcon,
@@ -41,6 +43,7 @@ const SECTIONS = [
   { id: "dictate", key: "dictate", Icon: MicIcon },
   { id: "modes", key: "modes", Icon: ModesIcon },
   { id: "providers", key: "providers", Icon: PlugIcon },
+  { id: "terminology", key: "terminology", Icon: BookIcon },
   { id: "behaviour", key: "hotkeys", Icon: KeyIcon },
   { id: "history", key: "history", Icon: LogIcon },
   { id: "about", key: "about", Icon: InfoIcon },
@@ -169,6 +172,9 @@ export function SettingsApp() {
           )}
           {section === "providers" && (
             <ProvidersEditor settings={settings} onSettingsChange={update} />
+          )}
+          {section === "terminology" && (
+            <TerminologyEditor settings={settings} onSettingsChange={update} />
           )}
           {section === "behaviour" && (
             <BehaviourEditor settings={settings} onSettingsChange={update} />
