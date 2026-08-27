@@ -280,6 +280,9 @@ pub async fn test_stt_key(stt: settings::SttSettings) -> Result<(), String> {
         crate::stt::gemini::validate_api_key(&api_key)
             .await
             .map_err(to_err)?;
+        return crate::stt::gemini::probe_live_setup(&stt, api_key)
+            .await
+            .map_err(to_err);
     }
     crate::stt::probe(&stt, api_key).await.map_err(to_err)
 }

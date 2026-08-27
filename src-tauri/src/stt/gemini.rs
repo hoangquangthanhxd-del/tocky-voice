@@ -10,6 +10,7 @@ use super::{request_with_header, SttEvent, WsProtocol};
 use crate::audio::capture::TARGET_SAMPLE_RATE;
 use crate::settings::SttSettings;
 use anyhow::{anyhow, Result};
+use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::http::Request;
 use tokio_tungstenite::tungstenite::Message;
@@ -76,6 +77,65 @@ pub async fn validate_api_key(api_key: &str) -> Result<()> {
     Err(anyhow!(
         "Gemini API key check failed: {message} ({status}, {google_status})"
     ))
+}
+
+/// Checks the Gemini Live transport only as far as the application-level handshake.
+///
+/// The generic provider probe sends silence and waits for the provider to flush a speech
+/// turn. Gemini Transcribe Live is allowed to produce no turn for silence, so that made
+/// a valid key/model look broken when the outer probe timeout expired. A connection
+/// check only needs to prove that the Live endpoint accepts the key, model and setup.
+pub async fn probe_live_setup(settings: &SttSettings, api_key: String) -> Result<()> {
+    let mut protocol = Gemini::new(settings, api_key);
+    let request = protocol.request()?;
+    let (mut ws, _) = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        tokio_tungstenite::connect_async(request),
+    )
+    .await
+    .map_err(|_| anyhow!("Gemini Live connection did not open within 10s"))?
+    .map_err(|e| anyhow!("connecting to Gemini Live: {e}"))?;
+
+    let init = protocol
+        .init_message()
+        .ok_or_else(|| anyhow!("Gemini Live setup message was not created"))?;
+    ws.send(init)
+        .await
+        .map_err(|e| anyhow!("sending Gemini Live setup: {e}"))?;
+
+    let wait = async {
+        while let Some(message) = ws.next().await {
+            match message {
+                Ok(Message::Text(text)) => {
+                    // Parse first so Google's explicit model/quota/config errors are
+                    // returned instead of being hidden behind a timeout.
+                    let _ = protocol.parse(&text)?;
+                    if protocol.is_setup_ack(&text) {
+                        return Ok(());
+                    }
+                }
+                Ok(Message::Close(frame)) => {
+                    let reason = frame
+                        .as_ref()
+                        .map(|f| f.reason.to_string())
+                        .filter(|r| !r.is_empty())
+                        .unwrap_or_else(|| "no reason supplied".into());
+                    return Err(anyhow!(
+                        "Gemini Live closed before setup completed: {reason}"
+                    ));
+                }
+                Ok(_) => {}
+                Err(e) => return Err(anyhow!("Gemini Live setup error: {e}")),
+            }
+        }
+        Err(anyhow!("Gemini Live closed before setup completed"))
+    };
+
+    let result = tokio::time::timeout(std::time::Duration::from_secs(15), wait)
+        .await
+        .map_err(|_| anyhow!("Gemini Live setup did not complete within 15s"))?;
+    let _ = ws.close(None).await;
+    result
 }
 
 impl WsProtocol for Gemini {
