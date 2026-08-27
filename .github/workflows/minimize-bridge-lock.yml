@@ -1,0 +1,35 @@
+name: Minimize bridge lockfile churn
+
+on:
+  push:
+    branches:
+      - feature/web-bridge-vertical-slice
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: feature/web-bridge-vertical-slice
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - name: Restore base lock and resolve only required additions
+        shell: bash
+        run: |
+          git show origin/feature/automotive-terminology:src-tauri/Cargo.lock > src-tauri/Cargo.lock
+          cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 >/dev/null
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/Cargo.lock
+          if git diff --cached --quiet; then
+            echo "Cargo.lock already minimal"
+            exit 0
+          fi
+          git commit -m "chore: minimize lockfile changes for web bridge"
+          git push origin HEAD:feature/web-bridge-vertical-slice
