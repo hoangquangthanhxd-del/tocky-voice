@@ -1,0 +1,47 @@
+name: Sync PTAP Cargo lockfile
+
+on:
+  push:
+    branches:
+      - feature/ptap-terminology-seed
+
+permissions:
+  contents: write
+
+jobs:
+  sync-lock:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: feature/ptap-terminology-seed
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+
+      - name: Refresh Cargo.lock from Cargo.toml
+        working-directory: ./src-tauri
+        run: cargo check --locked || cargo check
+
+      - name: Verify PTAP package version reached the lockfile
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('src-tauri/Cargo.lock').read_text(encoding='utf-8')
+          marker = 'name = "tockyvoice"\nversion = "0.5.0-ptap.1"'
+          if marker not in text:
+              raise SystemExit('Cargo.lock did not update to 0.5.0-ptap.1')
+          print('Cargo.lock contains tockyvoice 0.5.0-ptap.1')
+          PY
+
+      - name: Remove one-time workflow and commit lockfile
+        shell: bash
+        run: |
+          rm -f .github/workflows/sync-ptap-cargo-lock.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/Cargo.lock .github/workflows/sync-ptap-cargo-lock.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: sync Cargo lockfile for PTAP version"
+          git push origin HEAD:feature/ptap-terminology-seed
