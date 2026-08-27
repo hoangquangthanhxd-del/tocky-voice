@@ -1,10 +1,10 @@
 //! Google Gemini 3.5 Transcribe Live over the Gemini Live WebSocket API.
 //!
-//! Gemini differs from the other speech providers in one important transport detail:
+//! Gemini differs from the other speech providers in two important transport details:
 //! PCM is base64-encoded inside a JSON `realtimeInput` frame rather than sent as a raw
-//! binary WebSocket frame. The shared transport calls [`WsProtocol::audio_message`] so
-//! this stays isolated here while capture, buffering, timeouts and transcript delivery
-//! remain common to every provider.
+//! binary WebSocket frame, and audio must not start until the server acknowledges the
+//! setup with `setupComplete`. The shared transport exposes hooks for both so capture,
+//! buffering, timeouts and transcript delivery remain common to every provider.
 
 use super::{request_with_header, SttEvent, WsProtocol};
 use crate::audio::capture::TARGET_SAMPLE_RATE;
@@ -70,6 +70,17 @@ impl WsProtocol for Gemini {
             })
             .to_string(),
         ))
+    }
+
+    fn requires_setup_ack(&self) -> bool {
+        true
+    }
+
+    fn is_setup_ack(&self, text: &str) -> bool {
+        serde_json::from_str::<Value>(text)
+            .ok()
+            .and_then(|value| value.get("setupComplete").cloned())
+            .is_some()
     }
 
     fn audio_message(&self, bytes: Vec<u8>) -> Message {
@@ -207,6 +218,14 @@ mod tests {
             value["setup"]["inputAudioTranscription"]["customVocabulary"],
             json!(["7PK2604", "ROTUYN"])
         );
+    }
+
+    #[test]
+    fn waits_for_setup_complete_before_audio() {
+        let protocol = gemini();
+        assert!(protocol.requires_setup_ack());
+        assert!(protocol.is_setup_ack(r#"{"setupComplete":{}}"#));
+        assert!(!protocol.is_setup_ack(r#"{"serverContent":{}}"#));
     }
 
     #[test]
