@@ -20,6 +20,9 @@ jobs:
       - name: Apply terminology core
         run: python .github/apply-terminology-core.py
 
+      - name: Align terminology schema anchor
+        run: python .github/fix-terminology-anchor.py
+
       - name: Add PTAP seed and priority rules
         run: python .github/apply-ptap-terminology.py
 
@@ -60,6 +63,7 @@ jobs:
         run: |
           rm -f .github/ptap-terminology-phase1.patch
           rm -f .github/apply-terminology-core.py
+          rm -f .github/fix-terminology-anchor.py
           rm -f .github/apply-ptap-terminology.py
           rm -f .github/workflows/apply-ptap-terminology.yml
 
