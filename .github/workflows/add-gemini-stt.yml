@@ -1,0 +1,73 @@
+name: Apply Gemini STT integration
+
+on:
+  push:
+    branches: [feature/automotive-terminology]
+    paths:
+      - ".github/workflows/add-gemini-stt.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: feature/automotive-terminology
+
+      - name: Correct source-match literals
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/scripts/add_gemini_stt.py')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace(
+              '"Soniox nhận nhiều ngôn ngữ cùng lúc — đây là lý do câu trộn tiếng Việt và tiếng Anh vẫn nghe tốt. Bấm để bật/tắt; số là thứ tự ưu tiên."',
+              '"Soniox nhận nhiều ngôn ngữ cùng lúc — đây là thứ giúp câu pha tiếng Việt lẫn tiếng Anh chạy đúng. Bấm để bật/tắt; số là thứ tự ưu tiên."',
+          )
+          text = text.replace(
+              '"Ưu tiên các từ chuẩn đã chọn trong Soniox hoặc Deepgram trước khi map cục bộ."',
+              '"Ưu tiên các thuật ngữ đã chọn trong Soniox hoặc Deepgram trước khi map lại tại máy."',
+          )
+          p.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Apply integration
+        run: python .github/scripts/add_gemini_stt.py
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: rustfmt
+
+      - name: Format Rust changes
+        working-directory: src-tauri
+        run: cargo fmt
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck frontend
+        run: pnpm exec tsc --noEmit
+
+      - name: Commit application changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/add_gemini_stt.py
+          git add src src-tauri
+          git commit -m "feat: add Gemini live transcription provider"
+          git push origin HEAD:feature/automotive-terminology
