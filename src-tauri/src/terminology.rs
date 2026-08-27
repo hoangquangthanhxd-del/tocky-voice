@@ -126,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn maps_common_ptap_domain_aliases() {
+    fn maps_common_automotive_domain_aliases() {
         let settings = dictionary(vec![entry("CUROA", &["cu roa", "cua roa"]), entry("PHỚT", &["phốt"])]);
         assert_eq!(apply("lấy cu roa và phốt", &settings), "lấy CUROA và PHỚT");
     }

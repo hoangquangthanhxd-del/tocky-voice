@@ -8,12 +8,6 @@ interface Props {
   onSettingsChange: (settings: AppSettings) => void;
 }
 
-const SOURCE_LABELS: Record<string, string> = {
-  ptap_product_category: "PTAP · Loại SP",
-  ptap_product_name: "PTAP · Tên SP",
-  ptap_sku: "PTAP · SKU",
-  ptap_vehicle: "PTAP · Loại xe",
-};
 
 function normalized(value: string) {
   return value.trim().toLocaleLowerCase();
@@ -23,30 +17,48 @@ function parseAliases(value: string) {
   return [...new Set(value.split("\n").map((item) => item.trim()).filter(Boolean))];
 }
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function isWordChar(value: string | undefined) {
+  return Boolean(value && /[\p{L}\p{N}_]/u.test(value));
 }
 
 function previewMapping(text: string, entries: TerminologyEntry[]) {
-  const aliases = entries
+  const candidates = entries
     .filter((entry) => entry.enabled && entry.canonical.trim())
     .flatMap((entry) =>
-      entry.aliases
+      [entry.canonical, ...entry.aliases]
         .map((alias) => alias.trim())
         .filter(Boolean)
-        .map((alias) => ({ alias, canonical: entry.canonical.trim() })),
+        .map((alias) => ({
+          canonical: entry.canonical.trim(),
+          units: Array.from(alias).map((unit) => unit.toLocaleLowerCase()),
+          priority: entry.priority,
+        })),
     )
-    .sort((a, b) => b.alias.length - a.alias.length);
+    .sort((a, b) => b.units.length - a.units.length || b.priority - a.priority);
 
-  let result = text;
-  for (const item of aliases) {
-    const pattern = new RegExp(
-      `(^|[^\\p{L}\\p{N}])(${escapeRegExp(item.alias)})(?=$|[^\\p{L}\\p{N}])`,
-      "giu",
-    );
-    result = result.replace(pattern, (_whole, prefix: string) => `${prefix}${item.canonical}`);
+  const chars = Array.from(text);
+  const lowered = chars.map((unit) => unit.toLocaleLowerCase());
+  let output = "";
+  let index = 0;
+
+  while (index < chars.length) {
+    const candidate = candidates.find((item) => {
+      const end = index + item.units.length;
+      if (end > chars.length) return false;
+      if (isWordChar(chars[index - 1]) || isWordChar(chars[end])) return false;
+      return item.units.every((unit, offset) => lowered[index + offset] === unit);
+    });
+
+    if (candidate) {
+      output += candidate.canonical;
+      index += candidate.units.length;
+    } else {
+      output += chars[index];
+      index += 1;
+    }
   }
-  return result;
+
+  return output;
 }
 
 export function TerminologyEditor({ settings, onSettingsChange }: Props) {
@@ -242,7 +254,7 @@ export function TerminologyEditor({ settings, onSettingsChange }: Props) {
                       aria-label={t.terminology.canonical}
                     />
                     <span className={`chip ${entry.source ? "" : "chip--ok"}`}>
-                      {entry.source ? SOURCE_LABELS[entry.source] ?? entry.source : t.terminology.customSource}
+                      {entry.source ? `Imported · ${entry.source}` : t.terminology.customSource}
                     </span>
                   </div>
                   <div className="term-card__actions">

@@ -264,26 +264,6 @@ pub fn default_modes() -> Vec<Mode> {
     ]
 }
 
-#[cfg(test)]
-mod terminology_seed_tests {
-    use super::*;
-    use std::collections::HashMap;
-
-    #[test]
-    fn ptap_seed_is_balanced_across_the_four_requested_fields() {
-        let settings = default_terminology_settings();
-        assert_eq!(settings.entries.len(), 100);
-        let mut counts: HashMap<&str, usize> = HashMap::new();
-        for entry in &settings.entries {
-            *counts.entry(entry.source.as_deref().unwrap_or("unknown")).or_default() += 1;
-        }
-        assert_eq!(counts.get("ptap_product_category"), Some(&25));
-        assert_eq!(counts.get("ptap_product_name"), Some(&25));
-        assert_eq!(counts.get("ptap_sku"), Some(&25));
-        assert_eq!(counts.get("ptap_vehicle"), Some(&25));
-    }
-}
-
 /// Factory hotkeys for macOS.
 ///
 /// Starting a dictation is the one thing people do constantly, so it gets the shortest
@@ -314,9 +294,7 @@ pub fn default_hotkeys() -> HotkeySettings {
 }
 
 pub fn default_terminology_settings() -> TerminologySettings {
-    let entries: Vec<TerminologyEntry> = serde_json::from_str(include_str!("../ptap_terminology_seed.json"))
-        .expect("bundled PTAP terminology seed must be valid JSON");
-    TerminologySettings { enabled: true, send_to_stt: true, entries }
+    TerminologySettings::default()
 }
 
 pub fn default_settings() -> AppSettings {

@@ -115,7 +115,7 @@ pub struct TerminologyEntry {
     /// Lets users temporarily disable a mapping without deleting it.
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// User-created terms default above bundled seed terms, so they win provider caps.
+    /// Higher values win provider caps and equal-length alias conflicts.
     #[serde(default = "default_user_term_priority")]
     pub priority: i32,
     /// Provenance for bundled/imported terms; user-created entries normally leave this empty.
@@ -146,7 +146,7 @@ impl Default for TerminologySettings {
 pub struct AppSettings {
     pub stt: SttSettings,
     /// Domain vocabulary and deterministic transcript replacements.
-    #[serde(default = "defaults::default_terminology_settings")]
+    #[serde(default)]
     pub terminology: TerminologySettings,
     pub llm: LlmSettings,
     pub modes: Vec<Mode>,
@@ -319,13 +319,13 @@ mod tests {
     }
 
     #[test]
-    fn settings_from_before_terminology_receive_the_ptap_seed() {
+    fn settings_from_before_terminology_receive_an_empty_dictionary() {
         let mut raw = serde_json::to_value(defaults::default_settings()).unwrap();
         raw.as_object_mut().unwrap().remove("terminology");
 
         let parsed: AppSettings = serde_json::from_value(raw).unwrap();
 
-        assert_eq!(parsed.terminology.entries.len(), 100);
+        assert!(parsed.terminology.entries.is_empty());
     }
 
     #[test]

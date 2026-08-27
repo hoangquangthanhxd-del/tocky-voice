@@ -78,7 +78,7 @@ export function SettingsApp() {
       setVersion(v);
       // The rail already shows the version in small type; the title bar is the
       // spot people actually glance at, so it carries the version too.
-      getCurrentWindow().setTitle(`Tocky Voice v${v}`).catch(() => undefined);
+      getCurrentWindow().setTitle(`Tocky Voice Automotive v${v}`).catch(() => undefined);
     }).catch(() => undefined);
     api.getSettings().then(setSettings).catch(() => undefined);
     api.listLlmPresets().then(setPresets).catch(() => undefined);
@@ -129,7 +129,7 @@ export function SettingsApp() {
         <div className="rail__brand">
           <WaveMark className="rail__mark" />
           <div>
-            <div className="rail__name">Tocky Voice</div>
+            <div className="rail__name">Tocky Voice Automotive</div>
             <span className="rail__sub">{version ? `v${version}` : ""}</span>
           </div>
         </div>

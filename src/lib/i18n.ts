@@ -150,8 +150,8 @@ const en = {
   },
 
   terminology: {
-    title: "PTAP terminology",
-    lede: "Automotive vocabulary from PTAP plus your own corrections. Exact aliases are mapped deterministically, while selected canonical terms are also sent to the speech provider as recognition hints.",
+    title: "Automotive terminology",
+    lede: "Your automotive vocabulary and corrections. Exact aliases are mapped deterministically, while selected canonical terms are also sent to the speech provider as recognition hints.",
     behaviourSection: "Behaviour",
     enabled: "Use terminology dictionary",
     enabledHint: "Turns deterministic alias mapping on or off without deleting any entries.",
@@ -390,7 +390,7 @@ const vi: Dictionary = {
     dictate: "Đọc",
     modes: "Chế độ",
     providers: "Nhà cung cấp",
-    terminology: "Từ điển PTAP",
+    terminology: "Từ điển ô tô",
     hotkeys: "Cài đặt",
     history: "Lịch sử",
     about: "Giới thiệu",
@@ -508,8 +508,8 @@ const vi: Dictionary = {
   },
 
   terminology: {
-    title: "Từ điển PTAP",
-    lede: "Thuật ngữ ô tô lấy từ dữ liệu PTAP và các sửa lỗi anh tự thêm. Alias được map xác định tại máy; các từ chuẩn được chọn còn được gửi cho STT để tăng khả năng nhận đúng ngay từ đầu.",
+    title: "Từ điển ô tô",
+    lede: "Từ chuyên ngành ô tô và các cách nhận sai do anh tự quản lý. Alias được map xác định tại máy; các từ chuẩn được chọn còn được gửi cho STT để tăng khả năng nhận đúng ngay từ đầu.",
     behaviourSection: "Cách hoạt động",
     enabled: "Dùng từ điển chuyên ngành",
     enabledHint: "Bật/tắt map thuật ngữ mà không xóa dữ liệu đã lưu.",
