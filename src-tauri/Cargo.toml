@@ -70,6 +70,15 @@ objc2-app-kit = { version = "0.2", features = [
     "libc",
 ] }
 
+# Remember and reactivate the exact foreground window around a dictation. Hiding our
+# overlay is not enough on Windows: after its Stop button receives focus, Ctrl+V can
+# otherwise be delivered to the wrong window or nowhere at all.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 # `test-util` lets the timeout tests advance the clock instead of sleeping through it.
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
