@@ -44,6 +44,40 @@ impl Gemini {
     }
 }
 
+/// Validates a Gemini API key before opening the Live WebSocket.
+///
+/// The Live endpoint can complete the WebSocket upgrade without ever sending the
+/// application-level setup acknowledgement for an unusable credential. The ordinary
+/// REST models endpoint gives a precise Google API error, which is much more useful in
+/// Settings than a generic setup timeout.
+pub async fn validate_api_key(api_key: &str) -> Result<()> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()?;
+    let response = client
+        .get("https://generativelanguage.googleapis.com/v1beta/models")
+        .query(&[("pageSize", "1"), ("key", api_key)])
+        .send()
+        .await?;
+    let status = response.status();
+    let payload: Value = response.json().await?;
+    if status.is_success() {
+        return Ok(());
+    }
+
+    let message = payload
+        .pointer("/error/message")
+        .and_then(Value::as_str)
+        .unwrap_or("Google rejected the API key");
+    let google_status = payload
+        .pointer("/error/status")
+        .and_then(Value::as_str)
+        .unwrap_or("UNKNOWN");
+    Err(anyhow!(
+        "Gemini API key check failed: {message} ({status}, {google_status})"
+    ))
+}
+
 impl WsProtocol for Gemini {
     fn request(&self) -> Result<Request<()>> {
         let url = format!("{ENDPOINT}?key={}", urlencoding::encode(&self.api_key));

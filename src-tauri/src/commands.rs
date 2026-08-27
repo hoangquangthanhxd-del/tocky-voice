@@ -273,6 +273,14 @@ pub async fn test_stt_key(stt: settings::SttSettings) -> Result<(), String> {
     let Some(api_key) = secrets::get_key(account) else {
         return Err(format!("no key saved for {account}"));
     };
+    // Gemini's Live WebSocket can accept the HTTP upgrade and then stay silent when
+    // the credential is unusable. Validate the same key against Google's REST API
+    // first so Settings reports the real credential error instead of a setup timeout.
+    if matches!(stt.provider, settings::SttProviderKind::Gemini) {
+        crate::stt::gemini::validate_api_key(&api_key)
+            .await
+            .map_err(to_err)?;
+    }
     crate::stt::probe(&stt, api_key).await.map_err(to_err)
 }
 

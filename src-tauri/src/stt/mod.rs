@@ -32,7 +32,7 @@ const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 /// Some providers have an application-level setup handshake after WebSocket connect.
 /// Audio sent before that acknowledgement is not guaranteed to belong to the configured
 /// session, so keep it buffered locally until the provider says setup is complete.
-const SETUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
+const SETUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// How long any single write to the socket may take.
 ///
@@ -351,7 +351,10 @@ type WsReader = futures_util::stream::SplitStream<
 /// audio to the socket. Gemini Live emits `setupComplete`; other providers skip this
 /// path entirely. Provider error frames are still parsed here so a bad key/model is
 /// reported immediately instead of looking like a setup timeout.
-async fn wait_for_setup_ack(reader: &mut WsReader, protocol: &mut Box<dyn WsProtocol>) -> Result<()> {
+async fn wait_for_setup_ack(
+    reader: &mut WsReader,
+    protocol: &mut Box<dyn WsProtocol>,
+) -> Result<()> {
     let wait = async {
         while let Some(msg) = reader.next().await {
             match msg {
@@ -362,7 +365,9 @@ async fn wait_for_setup_ack(reader: &mut WsReader, protocol: &mut Box<dyn WsProt
                         return Ok(());
                     }
                 }
-                Ok(Message::Close(frame)) => return Err(anyhow!("{}", close_reason(frame.as_ref()))),
+                Ok(Message::Close(frame)) => {
+                    return Err(anyhow!("{}", close_reason(frame.as_ref())))
+                }
                 Ok(_) => {}
                 Err(e) => return Err(anyhow!("speech provider setup error: {e}")),
             }
