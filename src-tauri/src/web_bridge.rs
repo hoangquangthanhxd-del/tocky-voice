@@ -75,6 +75,10 @@ enum ClientMessage {
         #[serde(default)]
         field_context: Option<Value>,
     },
+    Listen {
+        request_id: String,
+        nonce: String,
+    },
     Stop {
         request_id: String,
     },
@@ -253,7 +257,10 @@ fn handle_command(
                 send_protocol_error(tx, Some(&request_id), "INVALID_REQUEST");
                 return;
             }
-            if !crate::ptap_vocabulary_snapshot::matches(vocabulary_revision, &vocabulary_fingerprint) {
+            if !crate::ptap_vocabulary_snapshot::matches(
+                vocabulary_revision,
+                &vocabulary_fingerprint,
+            ) {
                 send_protocol_error(tx, Some(&request_id), "VOCABULARY_SNAPSHOT_UNAVAILABLE");
                 return;
             }
@@ -316,6 +323,9 @@ fn handle_command(
                 tokio::time::sleep(PREPARE_TIMEOUT).await;
                 expire_prepared_request(&timeout_app, client_id, &timeout_request_id);
             });
+        }
+        ClientMessage::Listen { request_id, nonce } => {
+            start_prepared_from_client(app, client_id, tx, &request_id, &nonce);
         }
         ClientMessage::Stop { request_id } => {
             if owns_recording_request(app, client_id, &request_id) {
@@ -422,6 +432,54 @@ pub fn deliver_result(app: &AppHandle, raw_text: &str, final_text: &str) -> bool
     true
 }
 
+fn start_prepared_from_client(
+    app: &AppHandle,
+    client_id: Uuid,
+    tx: &mpsc::UnboundedSender<Message>,
+    request_id: &str,
+    nonce: &str,
+) {
+    let (vocabulary_revision, vocabulary_fingerprint) = {
+        let bridge = app.state::<WebBridge>();
+        let Ok(mut slot) = bridge.request.lock() else {
+            send_protocol_error(tx, Some(request_id), "BRIDGE_UNAVAILABLE");
+            return;
+        };
+        let Some(request) = slot.as_mut() else {
+            send_protocol_error(tx, Some(request_id), "REQUEST_NOT_PREPARED");
+            return;
+        };
+        if request.client_id != client_id
+            || request.request_id != request_id
+            || request.nonce != nonce
+            || request.phase != RequestPhase::Prepared
+        {
+            send_protocol_error(tx, Some(request_id), "REQUEST_NOT_PREPARED");
+            return;
+        }
+        request.phase = RequestPhase::Recording;
+        (
+            request.vocabulary_revision,
+            request.vocabulary_fingerprint.clone(),
+        )
+    };
+
+    if session::start(app, None) {
+        send_json(
+            tx,
+            json!({
+                "type": "recording_started",
+                "protocol_version": PROTOCOL_VERSION,
+                "request_id": request_id,
+                "vocabulary_revision": vocabulary_revision,
+                "vocabulary_fingerprint": vocabulary_fingerprint,
+            }),
+        );
+    } else if clear_matching_request(app, request_id) {
+        send_protocol_error(tx, Some(request_id), "START_FAILED");
+    }
+}
+
 /// Returns the immutable PTAP cache only while an owned browser session is recording.
 /// Native hotkey dictation keeps using the user's independently configured terminology.
 pub fn active_terminology(app: &AppHandle) -> Option<TerminologySettings> {
@@ -429,7 +487,12 @@ pub fn active_terminology(app: &AppHandle) -> Option<TerminologySettings> {
     let slot = bridge.request.lock().ok()?;
     let request = slot.as_ref()?;
     (request.phase == RequestPhase::Recording)
-        .then(|| crate::ptap_vocabulary_snapshot::terminology(request.vocabulary_revision, &request.vocabulary_fingerprint))
+        .then(|| {
+            crate::ptap_vocabulary_snapshot::terminology(
+                request.vocabulary_revision,
+                &request.vocabulary_fingerprint,
+            )
+        })
         .flatten()
 }
 
@@ -677,6 +740,22 @@ mod tests {
     fn nonce_rejects_unsafe_characters() {
         assert!(valid_nonce("abcDEF0123_-abcDEF0123_-abcDEF0123_"));
         assert!(!valid_nonce("abcDEF0123+/abcDEF0123+/abcDEF0123+/"));
+    }
+
+    #[test]
+    fn websocket_listen_command_pins_request_and_nonce() {
+        let message = serde_json::from_str::<ClientMessage>(
+            r#"{"type":"listen","request_id":"00000000-0000-4000-8000-000000000001","nonce":"a2345678901234567890123456789012"}"#,
+        )
+        .expect("listen command should deserialize");
+
+        match message {
+            ClientMessage::Listen { request_id, nonce } => {
+                assert_eq!(request_id, "00000000-0000-4000-8000-000000000001");
+                assert_eq!(nonce, "a2345678901234567890123456789012");
+            }
+            _ => panic!("expected listen command"),
+        }
     }
 
     #[test]
