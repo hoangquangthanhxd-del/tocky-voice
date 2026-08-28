@@ -8,6 +8,32 @@ pub mod refine;
 pub mod settings;
 pub mod stt;
 
+fn forwarded_tocky_links(argv: &[String]) -> impl Iterator<Item = &str> {
+    argv.iter()
+        .map(String::as_str)
+        .filter(|argument| argument.starts_with("tocky://"))
+}
+
+#[cfg(test)]
+mod deep_link_arg_tests {
+    use super::forwarded_tocky_links;
+
+    #[test]
+    fn forwards_only_tocky_protocol_arguments_from_the_secondary_process() {
+        let argv = vec![
+            "C:\\Program Files\\Tocky\\tockyvoice.exe".to_string(),
+            "--flag".to_string(),
+            "tocky://listen?request_id=abc&nonce=def".to_string(),
+            "https://staging.ptap-next-staging.pages.dev".to_string(),
+        ];
+
+        assert_eq!(
+            forwarded_tocky_links(&argv).collect::<Vec<_>>(),
+            vec!["tocky://listen?request_id=abc&nonce=def"],
+        );
+    }
+}
+
 mod commands;
 mod errors;
 mod focus;
@@ -39,8 +65,13 @@ pub fn run() {
     // consume or interfere with startup arguments.
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, argv, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             log::debug!("secondary Tocky instance forwarded arguments: {argv:?}");
+            for link in forwarded_tocky_links(&argv) {
+                if !web_bridge::handle_deep_link(app, link) {
+                    log::warn!("secondary Tocky instance supplied an unhandled deep link");
+                }
+            }
         }));
     }
 
