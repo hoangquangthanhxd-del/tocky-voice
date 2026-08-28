@@ -17,6 +17,7 @@ mod inject;
 #[cfg(target_os = "macos")]
 mod macos_accessibility;
 mod overlay;
+mod ptap_vocabulary_snapshot;
 mod private_file;
 mod session;
 mod state;

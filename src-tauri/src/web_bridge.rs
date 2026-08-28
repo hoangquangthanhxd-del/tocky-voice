@@ -7,6 +7,7 @@
 
 use crate::errors::ErrorPayload;
 use crate::session;
+use crate::settings::TerminologySettings;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -49,6 +50,8 @@ struct BridgeRequest {
     client_id: Uuid,
     request_id: String,
     nonce: String,
+    vocabulary_revision: u32,
+    vocabulary_fingerprint: String,
     phase: RequestPhase,
     tx: mpsc::UnboundedSender<Message>,
 }
@@ -65,6 +68,10 @@ enum ClientMessage {
         protocol_version: u32,
         request_id: String,
         nonce: String,
+        #[serde(default)]
+        vocabulary_revision: u32,
+        #[serde(default)]
+        vocabulary_fingerprint: String,
         #[serde(default)]
         field_context: Option<Value>,
     },
@@ -234,6 +241,8 @@ fn handle_command(
             protocol_version,
             request_id,
             nonce,
+            vocabulary_revision,
+            vocabulary_fingerprint,
             field_context,
         } => {
             if protocol_version != PROTOCOL_VERSION {
@@ -242,6 +251,10 @@ fn handle_command(
             }
             if !valid_request_id(&request_id) || !valid_nonce(&nonce) {
                 send_protocol_error(tx, Some(&request_id), "INVALID_REQUEST");
+                return;
+            }
+            if !crate::ptap_vocabulary_snapshot::matches(vocabulary_revision, &vocabulary_fingerprint) {
+                send_protocol_error(tx, Some(&request_id), "VOCABULARY_SNAPSHOT_UNAVAILABLE");
                 return;
             }
             if field_context
@@ -275,6 +288,8 @@ fn handle_command(
                 client_id,
                 request_id: request_id.clone(),
                 nonce,
+                vocabulary_revision,
+                vocabulary_fingerprint: vocabulary_fingerprint.clone(),
                 phase: RequestPhase::Prepared,
                 tx: tx.clone(),
             });
@@ -286,6 +301,8 @@ fn handle_command(
                     "type": "prepared",
                     "protocol_version": PROTOCOL_VERSION,
                     "request_id": request_id,
+                    "vocabulary_revision": vocabulary_revision,
+                    "vocabulary_fingerprint": vocabulary_fingerprint,
                     "origin": origin,
                 }),
             );
@@ -339,7 +356,7 @@ pub fn handle_deep_link(app: &AppHandle, raw_url: &str) -> bool {
         return false;
     };
 
-    let tx = {
+    let (tx, vocabulary_revision, vocabulary_fingerprint) = {
         let bridge = app.state::<WebBridge>();
         let Ok(mut slot) = bridge.request.lock() else {
             return false;
@@ -354,7 +371,11 @@ pub fn handle_deep_link(app: &AppHandle, raw_url: &str) -> bool {
             return false;
         }
         request.phase = RequestPhase::Recording;
-        request.tx.clone()
+        (
+            request.tx.clone(),
+            request.vocabulary_revision,
+            request.vocabulary_fingerprint.clone(),
+        )
     };
 
     if session::start(app, None) {
@@ -364,6 +385,8 @@ pub fn handle_deep_link(app: &AppHandle, raw_url: &str) -> bool {
                 "type": "recording_started",
                 "protocol_version": PROTOCOL_VERSION,
                 "request_id": request_id,
+                "vocabulary_revision": vocabulary_revision,
+                "vocabulary_fingerprint": vocabulary_fingerprint,
             }),
         );
         true
@@ -392,10 +415,22 @@ pub fn deliver_result(app: &AppHandle, raw_text: &str, final_text: &str) -> bool
             "request_id": request.request_id,
             "text": final_text,
             "raw_text": raw_text,
-            "vocabulary_revision": Value::Null,
+            "vocabulary_revision": request.vocabulary_revision,
+            "vocabulary_fingerprint": request.vocabulary_fingerprint,
         }),
     );
     true
+}
+
+/// Returns the immutable PTAP cache only while an owned browser session is recording.
+/// Native hotkey dictation keeps using the user's independently configured terminology.
+pub fn active_terminology(app: &AppHandle) -> Option<TerminologySettings> {
+    let bridge = app.state::<WebBridge>();
+    let slot = bridge.request.lock().ok()?;
+    let request = slot.as_ref()?;
+    (request.phase == RequestPhase::Recording)
+        .then(|| crate::ptap_vocabulary_snapshot::terminology(request.vocabulary_revision, &request.vocabulary_fingerprint))
+        .flatten()
 }
 
 pub fn deliver_error(app: &AppHandle, payload: &ErrorPayload) -> bool {

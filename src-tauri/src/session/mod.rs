@@ -202,8 +202,9 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) -> bool {
         });
     }
 
-    let protocol =
-        stt::build_protocol_with_terminology(&settings.stt, &settings.terminology, api_key);
+    let terminology = crate::web_bridge::active_terminology(app)
+        .unwrap_or_else(|| settings.terminology.clone());
+    let protocol = stt::build_protocol_with_terminology(&settings.stt, &terminology, api_key);
     let stt_task = tauri::async_runtime::spawn(stt::run_stream(protocol, audio_rx, event_tx));
 
     let Ok(mut slot) = recorder.active.lock() else {

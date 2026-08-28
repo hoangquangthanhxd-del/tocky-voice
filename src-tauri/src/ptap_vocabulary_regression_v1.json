@@ -1,0 +1,507 @@
+{
+  "schema_version": 1,
+  "revision": 1,
+  "fingerprint": "sha256:0ad16f171a1f639a2e9dc8bab26f2a5acb0cd416a920de4ead2e6eed8c734c67",
+  "cases": [
+    {
+      "id": "automotive-v1-001",
+      "input": "X O",
+      "expected": "XO"
+    },
+    {
+      "id": "automotive-v1-002",
+      "input": "XO 40 K",
+      "expected": "XO40K"
+    },
+    {
+      "id": "automotive-v1-003",
+      "input": "MPU K300",
+      "expected": "MPU-K300"
+    },
+    {
+      "id": "automotive-v1-004",
+      "input": "MTBX GT DSX",
+      "expected": "MTBX_GT-DSX"
+    },
+    {
+      "id": "automotive-v1-005",
+      "input": "PVN 12462",
+      "expected": "PVN12462"
+    },
+    {
+      "id": "automotive-v1-006",
+      "input": "PVN 13956",
+      "expected": "PVN13956"
+    },
+    {
+      "id": "automotive-v1-007",
+      "input": "10303 lafien",
+      "expected": "10303 Lafien"
+    },
+    {
+      "id": "automotive-v1-008",
+      "input": "MTBX GT DSTQ",
+      "expected": "MTBX_GT-DSTQ"
+    },
+    {
+      "id": "automotive-v1-009",
+      "input": "BKR5EYA 11",
+      "expected": "BKR5EYA-11"
+    },
+    {
+      "id": "automotive-v1-010",
+      "input": "GIP 501DY",
+      "expected": "GIP-501DY"
+    },
+    {
+      "id": "automotive-v1-011",
+      "input": "MTBX GT BX",
+      "expected": "MTBX_GT-BX"
+    },
+    {
+      "id": "automotive-v1-012",
+      "input": "MTBX GT KC",
+      "expected": "MTBX_GT-KC"
+    },
+    {
+      "id": "automotive-v1-013",
+      "input": "MTBX GT LUC",
+      "expected": "MTBX_GT-LUC"
+    },
+    {
+      "id": "automotive-v1-014",
+      "input": "MPU 118 23220 75040 0C050",
+      "expected": "MPU-118 23220-75040/0C050"
+    },
+    {
+      "id": "automotive-v1-015",
+      "input": "PK 20 TT",
+      "expected": "PK20TT"
+    },
+    {
+      "id": "automotive-v1-016",
+      "input": "65 x 90 x 13",
+      "expected": "65x90x13"
+    },
+    {
+      "id": "automotive-v1-017",
+      "input": "K 20 TT",
+      "expected": "K20TT"
+    },
+    {
+      "id": "automotive-v1-018",
+      "input": "SA 045",
+      "expected": "SA045"
+    },
+    {
+      "id": "automotive-v1-019",
+      "input": "SA 045 HQ",
+      "expected": "SA045HQ"
+    },
+    {
+      "id": "automotive-v1-020",
+      "input": "IK 20 TT",
+      "expected": "IK20TT"
+    },
+    {
+      "id": "automotive-v1-021",
+      "input": "13 T 0138 B",
+      "expected": "13T0138B"
+    },
+    {
+      "id": "automotive-v1-022",
+      "input": "90919T1002 XIN TOYOTA INDO 90919 T1002",
+      "expected": "90919T1002-XIN TOYOTA INDO 90919-T1002"
+    },
+    {
+      "id": "automotive-v1-023",
+      "input": "97311 x 4",
+      "expected": "97311x4"
+    },
+    {
+      "id": "automotive-v1-024",
+      "input": "BKR 6 EGP 97311",
+      "expected": "BKR6EGP 97311"
+    },
+    {
+      "id": "automotive-v1-025",
+      "input": "BRT1002 HOP",
+      "expected": "BRT1002-HOP"
+    },
+    {
+      "id": "automotive-v1-026",
+      "input": "bu ri chân ngắn giắc 16",
+      "expected": "BURI CHÂN NGẮN GIẮC 16"
+    },
+    {
+      "id": "automotive-v1-027",
+      "input": "mô tơ bơm xăng gim to",
+      "expected": "Mô tơ bơm xăng GIM TO"
+    },
+    {
+      "id": "automotive-v1-028",
+      "input": "bu ri hd kia m 12 t 16 chân dài",
+      "expected": "BURI HD KIA M12 T16 CHÂN DÀI"
+    },
+    {
+      "id": "automotive-v1-029",
+      "input": "xe ôm",
+      "expected": "XE ÔM"
+    },
+    {
+      "id": "automotive-v1-030",
+      "input": "má phanh sau guốc sa045",
+      "expected": "MÁ PHANH SAU GUỐC SA045"
+    },
+    {
+      "id": "automotive-v1-031",
+      "input": "bu ri chân dài m 12 t 14 tầm nhiệt 6",
+      "expected": "BURI CHÂN DÀI M12 T14 TẦM NHIỆT = 6"
+    },
+    {
+      "id": "automotive-v1-032",
+      "input": "lá côn f10a",
+      "expected": "LÁ CÔN F10A"
+    },
+    {
+      "id": "automotive-v1-033",
+      "input": "lọc nhớt 10303",
+      "expected": "Lọc nhớt 10303"
+    },
+    {
+      "id": "automotive-v1-034",
+      "input": "rotuyn lái ngang $22",
+      "expected": "ROTUYN LÁI NGANG $22"
+    },
+    {
+      "id": "automotive-v1-035",
+      "input": "LỌC DẦU M12X1 25 2E900 D3900",
+      "expected": "LỌC DẦU M12X1.25 2E900 D3900"
+    },
+    {
+      "id": "automotive-v1-036",
+      "input": "mâm ép f10a $18 cm lồi",
+      "expected": "MÂM ÉP F10A $18 CM LỒI"
+    },
+    {
+      "id": "automotive-v1-037",
+      "input": "bu ri suzuki k 14",
+      "expected": "BURI SUZUKI K14"
+    },
+    {
+      "id": "automotive-v1-038",
+      "input": "ắc bạc trụ đứng kia frontier",
+      "expected": "ẮC BẠC TRỤ ĐỨNG KIA FRONTIER"
+    },
+    {
+      "id": "automotive-v1-039",
+      "input": "heo bánh trước (1 piston)",
+      "expected": "HEO BÁNH TRƯỚC (1 PISTON)"
+    },
+    {
+      "id": "automotive-v1-040",
+      "input": "má phanh d2253",
+      "expected": "MÁ PHANH D2253"
+    },
+    {
+      "id": "automotive-v1-041",
+      "input": "giảm xóc trước thaco",
+      "expected": "GIẢM XÓC TRƯỚC THACO"
+    },
+    {
+      "id": "automotive-v1-042",
+      "input": "cao su càng a to",
+      "expected": "CAO SU CÀNG A TO"
+    },
+    {
+      "id": "automotive-v1-043",
+      "input": "má phanh sp1401",
+      "expected": "MÁ PHANH SP1401"
+    },
+    {
+      "id": "automotive-v1-044",
+      "input": "má phanh trước sp1399",
+      "expected": "MÁ PHANH TRƯỚC SP1399"
+    },
+    {
+      "id": "automotive-v1-045",
+      "input": "rotuyn cân bằng trước $12 z l283 tâm",
+      "expected": "ROTUYN CÂN BẰNG TRƯỚC $12 Z L283 TÂM"
+    },
+    {
+      "id": "automotive-v1-046",
+      "input": "rotuyn cân bằng trước",
+      "expected": "ROTUYN CÂN BẰNG TRƯỚC"
+    },
+    {
+      "id": "automotive-v1-047",
+      "input": "BƠM XĂNG GIM TO MPU K300",
+      "expected": "BƠM XĂNG GIM TO MPU-K300"
+    },
+    {
+      "id": "automotive-v1-048",
+      "input": "BI 6207 2RS",
+      "expected": "BI 6207-2RS"
+    },
+    {
+      "id": "automotive-v1-049",
+      "input": "càng i towner 950 990",
+      "expected": "CÀNG I TOWNER 950 990"
+    },
+    {
+      "id": "automotive-v1-050",
+      "input": "LÁ CÔN KD 31",
+      "expected": "LÁ CÔN KD-31"
+    },
+    {
+      "id": "automotive-v1-051",
+      "input": "transit",
+      "expected": "TRANSIT"
+    },
+    {
+      "id": "automotive-v1-052",
+      "input": "i 10",
+      "expected": "I10"
+    },
+    {
+      "id": "automotive-v1-053",
+      "input": "isuzu",
+      "expected": "ISUZU"
+    },
+    {
+      "id": "automotive-v1-054",
+      "input": "civic",
+      "expected": "CIVIC"
+    },
+    {
+      "id": "automotive-v1-055",
+      "input": "k 2700",
+      "expected": "k2700"
+    },
+    {
+      "id": "automotive-v1-056",
+      "input": "navara",
+      "expected": "NAVARA"
+    },
+    {
+      "id": "automotive-v1-057",
+      "input": "kenbo",
+      "expected": "KENBO"
+    },
+    {
+      "id": "automotive-v1-058",
+      "input": "k 3000",
+      "expected": "K3000"
+    },
+    {
+      "id": "automotive-v1-059",
+      "input": "vios 08",
+      "expected": "VIOS08"
+    },
+    {
+      "id": "automotive-v1-060",
+      "input": "vios 14",
+      "expected": "VIOS14"
+    },
+    {
+      "id": "automotive-v1-061",
+      "input": "ranger",
+      "expected": "ranger"
+    },
+    {
+      "id": "automotive-v1-062",
+      "input": "camry",
+      "expected": "CAMRY"
+    },
+    {
+      "id": "automotive-v1-063",
+      "input": "morning",
+      "expected": "MORNING"
+    },
+    {
+      "id": "automotive-v1-064",
+      "input": "county",
+      "expected": "COUNTY"
+    },
+    {
+      "id": "automotive-v1-065",
+      "input": "matiz",
+      "expected": "MATIZ"
+    },
+    {
+      "id": "automotive-v1-066",
+      "input": "elantra",
+      "expected": "ELANTRA"
+    },
+    {
+      "id": "automotive-v1-067",
+      "input": "cruze",
+      "expected": "CRUZE"
+    },
+    {
+      "id": "automotive-v1-068",
+      "input": "orlando",
+      "expected": "ORLANDO"
+    },
+    {
+      "id": "automotive-v1-069",
+      "input": "gimto",
+      "expected": "GIMTO"
+    },
+    {
+      "id": "automotive-v1-070",
+      "input": "pajero v93",
+      "expected": "PAJEROV93"
+    },
+    {
+      "id": "automotive-v1-071",
+      "input": "cerato",
+      "expected": "CERATO"
+    },
+    {
+      "id": "automotive-v1-072",
+      "input": "k 3",
+      "expected": "K3"
+    },
+    {
+      "id": "automotive-v1-073",
+      "input": "avante",
+      "expected": "AVANTE"
+    },
+    {
+      "id": "automotive-v1-074",
+      "input": "i 30",
+      "expected": "I30"
+    },
+    {
+      "id": "automotive-v1-075",
+      "input": "carens",
+      "expected": "CARENS"
+    },
+    {
+      "id": "automotive-v1-076",
+      "input": "ro tuyn",
+      "expected": "ROTUYN"
+    },
+    {
+      "id": "automotive-v1-077",
+      "input": "vòng bi",
+      "expected": "VÒNG BI"
+    },
+    {
+      "id": "automotive-v1-078",
+      "input": "má phanh đĩa",
+      "expected": "MÁ PHANH ĐĨA"
+    },
+    {
+      "id": "automotive-v1-079",
+      "input": "phốt",
+      "expected": "PHỚT"
+    },
+    {
+      "id": "automotive-v1-080",
+      "input": "cu roa",
+      "expected": "CUROA"
+    },
+    {
+      "id": "automotive-v1-081",
+      "input": "cao su càng a, cao su giằng, cao su chân giảm xóc",
+      "expected": "CAO SU CÀNG A, CAO SU GIẰNG, CAO SU CHÂN GIẢM XÓC"
+    },
+    {
+      "id": "automotive-v1-082",
+      "input": "giảm xóc (phuộc)",
+      "expected": "GIẢM XÓC (PHUỘC)"
+    },
+    {
+      "id": "automotive-v1-083",
+      "input": "lọc nhớt",
+      "expected": "LỌC NHỚT"
+    },
+    {
+      "id": "automotive-v1-084",
+      "input": "lọc gió động cơ",
+      "expected": "LỌC GIÓ ĐỘNG CƠ"
+    },
+    {
+      "id": "automotive-v1-085",
+      "input": "heo bánh, xi lanh phanh sau, bầu phanh sau",
+      "expected": "HEO BÁNH, XI LANH PHANH SAU, BẦU PHANH SAU"
+    },
+    {
+      "id": "automotive-v1-086",
+      "input": "thước lái + trục lái + trục các đăng + khớp truyền lái + bạc thước lái + bạt thước lái",
+      "expected": "THƯỚC LÁI + TRỤC LÁI + TRỤC CÁC ĐĂNG + KHỚP TRUYỀN LÁI + BẠC THƯỚC LÁI + BẠT THƯỚC LÁI"
+    },
+    {
+      "id": "automotive-v1-087",
+      "input": "má phanh càng",
+      "expected": "MÁ PHANH CÀNG"
+    },
+    {
+      "id": "automotive-v1-088",
+      "input": "piston phanh",
+      "expected": "PISTON PHANH"
+    },
+    {
+      "id": "automotive-v1-089",
+      "input": "lọc xăng",
+      "expected": "LỌC XĂNG"
+    },
+    {
+      "id": "automotive-v1-090",
+      "input": "lá côn",
+      "expected": "LÁ CÔN"
+    },
+    {
+      "id": "automotive-v1-091",
+      "input": "mâm ép bàn ép",
+      "expected": "Mâm ép Bàn ép"
+    },
+    {
+      "id": "automotive-v1-092",
+      "input": "lọc dầu",
+      "expected": "LỌC DẦU"
+    },
+    {
+      "id": "automotive-v1-093",
+      "input": "bu gi",
+      "expected": "BUGI"
+    },
+    {
+      "id": "automotive-v1-094",
+      "input": "ĐẦU LÁP CÂY LÁP TRƯỚC",
+      "expected": "ĐẦU LÁP - CÂY LÁP TRƯỚC"
+    },
+    {
+      "id": "automotive-v1-095",
+      "input": "ống nước",
+      "expected": "ỐNG NƯỚC"
+    },
+    {
+      "id": "automotive-v1-096",
+      "input": "gioăng quy lát",
+      "expected": "ROĂNG QUY LÁT"
+    },
+    {
+      "id": "automotive-v1-097",
+      "input": "chổi gạt mưa",
+      "expected": "CHỔI GẠT MƯA"
+    },
+    {
+      "id": "automotive-v1-098",
+      "input": "bơm nước",
+      "expected": "BƠM NƯỚC"
+    },
+    {
+      "id": "automotive-v1-099",
+      "input": "gioăng giàn cò nắp giàn cò",
+      "expected": "ROĂNG GIÀN CÒ - NẮP GIÀN CÒ"
+    },
+    {
+      "id": "automotive-v1-100",
+      "input": "bi tê, ống xả e bite",
+      "expected": "BI TÊ, ỐNG XẢ E BITE"
+    }
+  ]
+}

@@ -73,14 +73,16 @@ pub async fn finish(
         return;
     }
 
-    let mapped_transcript = terminology::apply(&transcript, &settings.terminology);
+    let terminology_settings = web_bridge::active_terminology(app)
+        .unwrap_or_else(|| settings.terminology.clone());
+    let mapped_transcript = terminology::apply(&transcript, &terminology_settings);
     let refined_text = if mode.ai_cleanup {
         state::emit_status(app, Phase::Refining, mode_id);
         refine_or_fall_back(app, &settings, &mode, &mapped_transcript).await
     } else {
         mapped_transcript
     };
-    let final_text = terminology::apply(&refined_text, &settings.terminology);
+    let final_text = terminology::apply(&refined_text, &terminology_settings);
 
     // Browser-initiated takes have an explicit owner. Return the final text to that
     // request and do not synthesize a paste keystroke into whatever currently has OS
