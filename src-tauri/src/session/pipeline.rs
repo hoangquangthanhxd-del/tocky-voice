@@ -6,14 +6,15 @@
 //! even when delivery fails, so nothing is ever lost silently.
 
 use crate::audio::feedback;
+use crate::errors::{ErrorKind, ErrorPayload};
 use crate::history::{self, HistoryEntry};
 use crate::overlay;
 use crate::refine::{self, RefineRequest};
-use crate::settings::{secrets, defaults, OutputAction};
-use crate::errors::{ErrorKind, ErrorPayload};
+use crate::settings::{defaults, secrets, OutputAction};
 use crate::state::{self, emit_error, events, Phase};
 use crate::{audio, inject};
 use chrono::Utc;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// How long a failure stays on screen.
@@ -47,6 +48,8 @@ pub async fn finish(
     pcm: Vec<i16>,
     target_app: crate::focus::TargetApp,
     heard_audio: bool,
+    vocabulary: Option<Arc<crate::terminology::CompiledVocabulary>>,
+    bridge: Option<super::BridgeTake>,
 ) {
     let settings = state::settings_snapshot(app);
     let mode = match settings.mode(mode_id) {
@@ -55,6 +58,18 @@ pub async fn finish(
     };
 
     if transcript.trim().is_empty() {
+        if let Some(bridge) = bridge.as_ref() {
+            let detail = if heard_audio {
+                "EMPTY_TRANSCRIPT"
+            } else {
+                "NO_AUDIO_CAPTURED"
+            };
+            let _ = bridge.output.send(serde_json::json!({
+                "type": "error",
+                "request_id": bridge.request_id,
+                "error": { "detail": detail, "message": "TOCKY did not receive a usable transcript." },
+            }));
+        }
         if heard_audio {
             // Someone pressed the key and said nothing, or the take was too short to
             // land a word. A quiet no-op, not an error toast.
@@ -70,11 +85,34 @@ pub async fn finish(
         return;
     }
 
+    let normalized = vocabulary
+        .as_ref()
+        .map(|dictionary| dictionary.normalize(&transcript))
+        .unwrap_or_else(|| transcript.clone());
+
+    if let Some(bridge) = bridge {
+        let snapshot = bridge.vocabulary.snapshot();
+        let _ = bridge.output.send(serde_json::json!({
+            "type": "result",
+            "request_id": bridge.request_id,
+            "contract_version": 1,
+            "raw_text": transcript,
+            "text": normalized,
+            "normalized_text": normalized,
+            "vocabulary_revision": snapshot.revision,
+            "vocabulary_fingerprint": snapshot.fingerprint,
+            "final": true,
+        }));
+        overlay::hide(app);
+        state::emit_status(app, Phase::Idle, mode_id);
+        return;
+    }
+
     let final_text = if mode.ai_cleanup {
         state::emit_status(app, Phase::Refining, mode_id);
-        refine_or_fall_back(app, &settings, &mode, &transcript).await
+        refine_or_fall_back(app, &settings, &mode, &normalized).await
     } else {
-        transcript.clone()
+        normalized
     };
 
     // Hide the overlay before pasting: it must not be frontmost when the keystroke
@@ -137,7 +175,11 @@ async fn refine_or_fall_back(
         .filter(|p| p.needs_key)
         .and_then(|p| secrets::get_key(p.secret_key));
 
-    if defaults::preset(&llm.preset).map(|p| p.needs_key).unwrap_or(true) && api_key.is_none() {
+    if defaults::preset(&llm.preset)
+        .map(|p| p.needs_key)
+        .unwrap_or(true)
+        && api_key.is_none()
+    {
         emit_error(
             app,
             ErrorPayload::with_detail(ErrorKind::NoLlmKey, llm.preset.clone()),

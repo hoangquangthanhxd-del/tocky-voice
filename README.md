@@ -139,6 +139,20 @@ Chỉ có một cách bắt đầu: bấm một lần để thu, bấm lần n�
 
 Đổi lại được hết trong **Cài đặt → Phím tắt**.
 
+### Dùng từ PTAP web (V6)
+
+TOCKY 0.5 mở bridge WebSocket chỉ trên loopback `127.0.0.1:17891/bridge`; bridge không
+nghe trên LAN và chỉ upgrade Origin PTAP staging/preview hoặc loopback development. PTAP web lấy snapshot thuật ngữ đang active từ Supabase bằng phiên đăng nhập,
+gửi nguyên revision/fingerprint/snapshot cho TOCKY, và mỗi lần ghi âm pin một snapshot bất
+biến đến khi session kết thúc. TOCKY kiểm tra collision, revision và SHA-256 trước khi dùng,
+lưu cache có checksum để dùng khi backend tạm offline, chuẩn hoá transcript cục bộ rồi mới
+trả kết quả. API key STT vẫn nằm trong credential store của máy và không đi qua PTAP web.
+
+Snapshot V6 hiện có 1.316 mục hiệu lực; chỉ 79 canonical được phép đi vào provider hints
+(hard cap 100). Customer, garage và place chỉ dùng cho chuẩn hoá cục bộ, không được gửi cho
+nhà cung cấp STT. Mobile không kết nối bridge PC và tiếp tục dùng remote transport theo cơ
+chế consent của PTAP.
+
 ### Chế độ (Modes)
 
 Một chế độ là một câu lệnh cho AI cộng với cách giao chữ, nên cùng một câu nói có thể ra

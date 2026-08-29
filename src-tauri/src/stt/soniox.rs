@@ -17,14 +17,16 @@ pub struct Soniox {
     api_key: String,
     model: String,
     language_hints: Vec<String>,
+    provider_terms: Vec<String>,
 }
 
 impl Soniox {
-    pub fn new(settings: &SttSettings, api_key: String) -> Self {
+    pub fn new(settings: &SttSettings, api_key: String, provider_terms: Vec<String>) -> Self {
         Self {
             api_key,
             model: settings.soniox_model.clone(),
             language_hints: settings.language_hints.clone(),
+            provider_terms,
         }
     }
 }
@@ -46,6 +48,7 @@ impl WsProtocol for Soniox {
             "language_hints": self.language_hints,
             "enable_language_identification": true,
             "enable_endpoint_detection": true,
+            "context": { "terms": self.provider_terms },
         });
         Some(Message::Text(config.to_string()))
     }
@@ -85,7 +88,11 @@ impl WsProtocol for Soniox {
             if text.starts_with('<') && text.ends_with('>') {
                 continue;
             }
-            if token.get("is_final").and_then(|f| f.as_bool()).unwrap_or(false) {
+            if token
+                .get("is_final")
+                .and_then(|f| f.as_bool())
+                .unwrap_or(false)
+            {
                 committed.push_str(text);
             } else {
                 interim.push_str(text);
@@ -118,6 +125,7 @@ mod tests {
                 language_hints: vec!["vi".into()],
             },
             "test-key".into(),
+            Vec::new(),
         )
     }
 
@@ -137,6 +145,17 @@ mod tests {
     #[test]
     fn a_frame_that_is_not_json_is_ignored_rather_than_treated_as_a_failure() {
         assert!(soniox().parse("keepalive").unwrap().is_empty());
+    }
+
+    #[test]
+    fn provider_projection_is_sent_as_context_terms() {
+        let mut protocol = soniox();
+        protocol.provider_terms = vec!["LỌC DẦU".into(), "RANGER".into()];
+        let Message::Text(config) = protocol.init_message().unwrap() else {
+            panic!("expected config frame");
+        };
+        let config: serde_json::Value = serde_json::from_str(&config).unwrap();
+        assert_eq!(config["context"]["terms"], json!(["LỌC DẦU", "RANGER"]));
     }
 
     #[test]

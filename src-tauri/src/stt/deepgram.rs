@@ -14,19 +14,21 @@ pub struct Deepgram {
     api_key: String,
     model: String,
     language: String,
+    provider_terms: Vec<String>,
 }
 
 impl Deepgram {
-    pub fn new(settings: &SttSettings, api_key: String) -> Self {
+    pub fn new(settings: &SttSettings, api_key: String, provider_terms: Vec<String>) -> Self {
         Self {
             api_key,
             model: settings.deepgram_model.clone(),
             language: settings.language.clone(),
+            provider_terms,
         }
     }
 
     fn url(&self) -> String {
-        format!(
+        let mut url = format!(
             "wss://api.deepgram.com/v1/listen\
              ?model={model}&language={language}\
              &encoding=linear16&sample_rate={rate}&channels=1\
@@ -34,13 +36,50 @@ impl Deepgram {
             model = urlencoding::encode(&self.model),
             language = urlencoding::encode(&self.language),
             rate = TARGET_SAMPLE_RATE,
+        );
+        // Nova-2 uses the legacy `keywords` parameter. Repeating the parameter is
+        // the provider-defined representation of a list; no weights or scoring are
+        // invented here.
+        for term in &self.provider_terms {
+            url.push_str("&keywords=");
+            url.push_str(&urlencoding::encode(term));
+        }
+        url
+    }
+}
+
+#[cfg(test)]
+mod vocabulary_tests {
+    use super::*;
+    use crate::settings::{SttProviderKind, SttSettings};
+
+    #[test]
+    fn nova_two_receives_each_projected_term_once() {
+        let settings = SttSettings {
+            provider: SttProviderKind::Deepgram,
+            soniox_model: "unused".into(),
+            deepgram_model: "nova-2".into(),
+            language: "vi".into(),
+            language_hints: vec!["vi".into()],
+        };
+        let url = Deepgram::new(
+            &settings,
+            "key".into(),
+            vec!["MÁ PHANH".into(), "MAZDA 3".into()],
         )
+        .url();
+        assert!(url.contains("keywords=M%C3%81%20PHANH"));
+        assert!(url.contains("keywords=MAZDA%203"));
     }
 }
 
 impl WsProtocol for Deepgram {
     fn request(&self) -> Result<Request<()>> {
-        request_with_header(&self.url(), "authorization", &format!("Token {}", self.api_key))
+        request_with_header(
+            &self.url(),
+            "authorization",
+            &format!("Token {}", self.api_key),
+        )
     }
 
     fn init_message(&self) -> Option<Message> {

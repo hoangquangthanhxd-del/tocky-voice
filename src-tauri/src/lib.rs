@@ -7,7 +7,9 @@ pub mod audio;
 pub mod refine;
 pub mod settings;
 pub mod stt;
+pub mod terminology;
 
+mod bridge;
 mod commands;
 mod errors;
 mod focus;
@@ -19,8 +21,8 @@ mod macos_accessibility;
 mod overlay;
 mod private_file;
 mod session;
-mod tray;
 mod state;
+mod tray;
 
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
@@ -50,6 +52,7 @@ pub fn run() {
                 .build(),
         )
         .manage(session::Recorder::default())
+        .manage(terminology::VocabularyManager::default())
         .manage(hotkeys::HotkeyRegistry::default())
         .manage(audio::mic_test::MicTest::default())
         .setup(|app| {
@@ -95,8 +98,25 @@ pub fn run() {
                 }
             );
             app.manage(state::AppState::new(settings.clone()));
+            match terminology::cache_path(&handle)
+                .and_then(|path| handle.state::<terminology::VocabularyManager>().load_cache(&path).map(|_| ()))
+            {
+                Ok(()) => {
+                    if let Ok(snapshot) = handle.state::<terminology::VocabularyManager>().pin() {
+                        log::info!(
+                            "loaded PTAP vocabulary cache: revision={} fingerprint={} terms={} provider_terms={}",
+                            snapshot.snapshot().revision,
+                            snapshot.snapshot().fingerprint,
+                            snapshot.snapshot().entries.len(),
+                            snapshot.provider_terms().map(|terms| terms.len()).unwrap_or(0),
+                        );
+                    }
+                }
+                Err(error) => log::warn!("PTAP vocabulary cache unavailable: {error:#}"),
+            }
             hotkeys::apply(&handle, &settings);
             tray::build(&handle, &settings)?;
+            bridge::start(&handle);
 
             // Under the Accessory activation policy the app never activates on its own,
             // so the settings window would open behind everything else. Ask for focus
@@ -190,4 +210,3 @@ pub fn show_settings_window(app: &tauri::AppHandle) {
     let _ = window.show();
     let _ = window.set_focus();
 }
-

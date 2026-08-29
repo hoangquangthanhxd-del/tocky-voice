@@ -7,10 +7,10 @@
 mod pipeline;
 
 use crate::audio::{capture, feedback, mic_test, resample};
+use crate::errors::{ErrorKind, ErrorPayload};
 use crate::focus;
 use crate::overlay;
 use crate::settings::secrets;
-use crate::errors::{ErrorKind, ErrorPayload};
 use crate::state::{self, emit_error, events, Phase};
 use crate::stt;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,6 +37,17 @@ struct ActiveTake {
     /// even if the user clicks the overlay before stopping.
     target_app: focus::TargetApp,
     stt_task: tauri::async_runtime::JoinHandle<anyhow::Result<String>>,
+    /// Immutable terminology pinned when this take began. A refresh only affects the
+    /// next take because this Arc owns the current compiled dictionary.
+    vocabulary: Option<Arc<crate::terminology::CompiledVocabulary>>,
+    bridge: Option<BridgeTake>,
+}
+
+#[derive(Clone)]
+pub(crate) struct BridgeTake {
+    pub request_id: String,
+    pub vocabulary: Arc<crate::terminology::CompiledVocabulary>,
+    pub output: mpsc::UnboundedSender<serde_json::Value>,
 }
 
 /// Peak amplitude (0..1) a chunk has to reach to count as "the microphone is live".
@@ -81,9 +92,23 @@ pub fn toggle(app: &AppHandle) {
 /// Begins recording. `mode_id` switches mode first; `None` keeps the active one.
 /// A no-op if a take is already running, so a repeated key press is harmless.
 pub fn start(app: &AppHandle, mode_id: Option<String>) {
+    if let Err(error) = start_internal(app, mode_id, None) {
+        log::warn!("dictation did not start: {error:#}");
+    }
+}
+
+pub(crate) fn start_bridge(app: &AppHandle, bridge: BridgeTake) -> anyhow::Result<()> {
+    start_internal(app, None, Some(bridge))
+}
+
+fn start_internal(
+    app: &AppHandle,
+    mode_id: Option<String>,
+    bridge: Option<BridgeTake>,
+) -> anyhow::Result<()> {
     let recorder = app.state::<Recorder>();
     if recorder.is_recording() {
-        return;
+        anyhow::bail!("a dictation session is already active");
     }
 
     // The setup wizard's level meter holds the device open. Some Windows drivers give
@@ -97,6 +122,15 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
 
     let settings = state::settings_snapshot(app);
     let mode_id = settings.active_mode().id.clone();
+    let vocabulary = bridge
+        .as_ref()
+        .map(|take| take.vocabulary.clone())
+        .or_else(|| {
+            app.state::<crate::terminology::VocabularyManager>()
+                .pin()
+                .map_err(|error| log::warn!("dictation starts without PTAP vocabulary: {error:#}"))
+                .ok()
+        });
 
     // Capture the target before anything of ours can take focus.
     let target_app = focus::capture();
@@ -107,16 +141,19 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
             ErrorPayload::with_detail(ErrorKind::NoSttKey, format!("{:?}", settings.stt.provider)),
         );
         feedback::play(feedback::Cue::Error, settings.audio.feedback_volume);
-        return;
+        anyhow::bail!("no STT provider key is configured");
     };
 
     let (chunk_tx, mut chunk_rx) = mpsc::unbounded_channel::<capture::CaptureChunk>();
     let capture = match capture::start(settings.audio.input_device.clone(), chunk_tx) {
         Ok(handle) => handle,
         Err(e) => {
-            emit_error(app, ErrorPayload::with_detail(ErrorKind::MicUnavailable, format!("{e:#}")));
+            emit_error(
+                app,
+                ErrorPayload::with_detail(ErrorKind::MicUnavailable, format!("{e:#}")),
+            );
             feedback::play(feedback::Cue::Error, settings.audio.feedback_volume);
-            return;
+            anyhow::bail!("microphone unavailable: {e:#}");
         }
     };
 
@@ -146,7 +183,11 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
         });
     }
 
-    let protocol = stt::build_protocol(&settings.stt, api_key);
+    let provider_terms = vocabulary
+        .as_ref()
+        .and_then(|value| value.provider_terms().ok())
+        .unwrap_or_default();
+    let protocol = stt::build_protocol_with_vocabulary(&settings.stt, api_key, provider_terms);
     let stt_task = tauri::async_runtime::spawn(stt::run_stream(protocol, audio_rx, event_tx));
 
     if let Ok(mut slot) = recorder.active.lock() {
@@ -159,6 +200,8 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
             mode_id: mode_id.clone(),
             target_app,
             stt_task,
+            vocabulary,
+            bridge: bridge.clone(),
         });
     }
 
@@ -203,6 +246,15 @@ pub fn start(app: &AppHandle, mode_id: Option<String>) {
     overlay::show(app);
     feedback::play(feedback::Cue::Start, settings.audio.feedback_volume);
     state::emit_status(app, Phase::Recording, &mode_id);
+    if let Some(bridge) = bridge {
+        let _ = bridge.output.send(serde_json::json!({
+            "type": "recording_started",
+            "request_id": bridge.request_id,
+            "vocabulary_revision": bridge.vocabulary.snapshot().revision,
+            "vocabulary_fingerprint": bridge.vocabulary.snapshot().fingerprint,
+        }));
+    }
+    Ok(())
 }
 
 /// Ends the take and hands the result to the transcript → refine → paste pipeline.
@@ -257,6 +309,7 @@ pub fn stop(app: &AppHandle) {
         let transcript = match streamed {
             Ok(Ok(Ok(text))) => text,
             Ok(Ok(Err(e))) => {
+                send_bridge_error(&take, "TRANSCRIPTION_FAILED", &format!("{e:#}"));
                 pipeline::fail(
                     &app,
                     &take.mode_id,
@@ -265,6 +318,7 @@ pub fn stop(app: &AppHandle) {
                 return;
             }
             Ok(Err(e)) => {
+                send_bridge_error(&take, "TRANSCRIPTION_FAILED", &format!("{e}"));
                 pipeline::fail(
                     &app,
                     &take.mode_id,
@@ -274,6 +328,11 @@ pub fn stop(app: &AppHandle) {
             }
             Err(_elapsed) => {
                 take.stt_task.abort();
+                send_bridge_error(
+                    &take,
+                    "TRANSCRIPTION_TIMEOUT",
+                    "the speech provider stopped responding",
+                );
                 pipeline::fail(
                     &app,
                     &take.mode_id,
@@ -306,9 +365,21 @@ pub fn stop(app: &AppHandle) {
             pcm,
             take.target_app,
             take.heard_audio.load(Ordering::Relaxed),
+            take.vocabulary,
+            take.bridge,
         )
         .await;
     });
+}
+
+fn send_bridge_error(take: &ActiveTake, code: &str, message: &str) {
+    if let Some(bridge) = &take.bridge {
+        let _ = bridge.output.send(serde_json::json!({
+            "type": "error",
+            "request_id": bridge.request_id,
+            "error": { "detail": code, "message": message },
+        }));
+    }
 }
 
 /// Aborts the take in flight and discards its audio.

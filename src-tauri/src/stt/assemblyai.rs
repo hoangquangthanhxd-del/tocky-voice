@@ -16,23 +16,29 @@ pub struct AssemblyAi {
     /// Guards against committing the same turn twice when both the raw and the
     /// formatted end-of-turn messages arrive.
     last_committed_turn: i64,
+    provider_terms: Vec<String>,
 }
 
 impl AssemblyAi {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, provider_terms: Vec<String>) -> Self {
         Self {
             api_key,
             last_committed_turn: -1,
+            provider_terms,
         }
     }
 }
 
 impl WsProtocol for AssemblyAi {
     fn request(&self) -> Result<Request<()>> {
-        let url = format!(
+        let mut url = format!(
             "wss://streaming.assemblyai.com/v3/ws?sample_rate={TARGET_SAMPLE_RATE}\
              &encoding=pcm_s16le&format_turns=true"
         );
+        for term in &self.provider_terms {
+            url.push_str("&keyterms_prompt=");
+            url.push_str(&urlencoding::encode(term));
+        }
         request_with_header(&url, "authorization", &self.api_key)
     }
 
@@ -72,13 +78,35 @@ impl WsProtocol for AssemblyAi {
             .get("turn_is_formatted")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        let turn_order = value.get("turn_order").and_then(|v| v.as_i64()).unwrap_or(0);
+        let turn_order = value
+            .get("turn_order")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
 
-        Ok(if end_of_turn && formatted && turn_order > self.last_committed_turn {
-            self.last_committed_turn = turn_order;
-            vec![SttEvent::Final(transcript.to_string())]
-        } else {
-            vec![SttEvent::Partial(transcript.to_string())]
-        })
+        Ok(
+            if end_of_turn && formatted && turn_order > self.last_committed_turn {
+                self.last_committed_turn = turn_order;
+                vec![SttEvent::Final(transcript.to_string())]
+            } else {
+                vec![SttEvent::Partial(transcript.to_string())]
+            },
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_projection_uses_repeated_keyterms_prompt_parameters() {
+        let protocol = AssemblyAi::new("test-key".into(), vec!["LỌC DẦU".into(), "RANGER".into()]);
+        let request = protocol.request().unwrap();
+        let query = request.uri().query().unwrap();
+        assert!(
+            query.contains("keyterms_prompt=L%E1%BB%8CC%20D%E1%BA%A6U"),
+            "{query}"
+        );
+        assert!(query.contains("keyterms_prompt=RANGER"), "{query}");
     }
 }
