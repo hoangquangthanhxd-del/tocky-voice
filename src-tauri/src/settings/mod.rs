@@ -20,6 +20,7 @@ pub enum SttProviderKind {
     Soniox,
     Deepgram,
     AssemblyAi,
+    Gemini,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,7 +32,7 @@ pub struct SttSettings {
     pub deepgram_model: String,
     /// Primary language code sent to providers that want a single language (Deepgram).
     pub language: String,
-    /// Hint list for providers that accept several (Soniox). Order matters — most likely first.
+    /// Hint list for providers that accept several (Soniox/Gemini). Order matters — most likely first.
     pub language_hints: Vec<String>,
 }
 
@@ -151,7 +152,7 @@ fn default_true() -> bool {
 
 /// Every credential name the app can store, for backend migration.
 pub fn all_secret_accounts() -> Vec<&'static str> {
-    let mut accounts = vec!["soniox", "deepgram", "assemblyai"];
+    let mut accounts = vec!["soniox", "deepgram", "assemblyai", "gemini"];
     accounts.extend(defaults::llm_presets().iter().map(|p| p.secret_key));
     accounts
 }

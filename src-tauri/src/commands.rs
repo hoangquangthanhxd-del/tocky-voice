@@ -265,11 +265,22 @@ pub async fn test_llm(app: AppHandle) -> Result<String, String> {
 /// settings UI writes through a debounce, so a provider the user picked a moment ago
 /// has not reached disk yet and reading the snapshot would test the previous one.
 #[tauri::command]
-pub async fn test_stt_key(stt: settings::SttSettings) -> Result<(), String> {
+pub async fn test_stt_key(app: AppHandle, stt: settings::SttSettings) -> Result<(), String> {
     let account = secrets::stt_account(&stt.provider);
     let Some(api_key) = secrets::get_key(account) else {
         return Err(format!("no key saved for {account}"));
     };
+    if matches!(stt.provider, settings::SttProviderKind::Gemini) {
+        crate::stt::gemini::validate_api_key(&api_key).await.map_err(to_err)?;
+        // A key check must not require a PTAP snapshot. Runtime dictation still passes
+        // the pinned vocabulary projection through `build_protocol_with_vocabulary`.
+        let terms = app
+            .state::<crate::terminology::VocabularyManager>()
+            .pin()
+            .and_then(|snapshot| snapshot.provider_terms())
+            .unwrap_or_default();
+        return crate::stt::gemini::probe_live_setup(&stt, api_key, terms).await.map_err(to_err);
+    }
     crate::stt::probe(&stt, api_key).await.map_err(to_err)
 }
 

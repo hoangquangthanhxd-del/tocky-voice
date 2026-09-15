@@ -121,7 +121,7 @@ const en = {
     languageHint: "Deepgram takes exactly one language.",
     hints: "Language hints",
     hintsHint:
-      "Soniox accepts several at once — this is what makes a sentence that mixes Vietnamese and English work. Click to toggle; the number shows priority.",
+      "Soniox and Gemini accept several at once — useful when a sentence mixes Vietnamese and English. Click to toggle; the number shows priority.",
     aiSection: "AI cleanup",
     provider: "Provider",
     providerHint: "Anything OpenAI-compatible works, including a local Ollama.",
@@ -348,9 +348,12 @@ const en = {
   stt: {
     best_vietnamese: "Best for Vietnamese",
     free_credit: "Free {amount}",
+    free_tier: "Free tier",
     paid: "Paid — ${price}/hour",
     soniox:
       "The most accurate when you mix Vietnamese and English in one sentence. Billed from the first minute, but the cheapest per hour.",
+    gemini:
+      "Gemini 3.5 Transcribe Live: free tier, multilingual transcription and custom vocabulary for automotive terms.",
     deepgram:
       "The largest free credit — enough for hundreds of hours. Handles Vietnamese, but noticeably weaker than Soniox on sentences that mix in English.",
     assembly_ai:
@@ -456,7 +459,7 @@ const vi: Dictionary = {
     languageHint: "Deepgram chỉ nhận đúng một ngôn ngữ.",
     hints: "Gợi ý ngôn ngữ",
     hintsHint:
-      "Soniox nhận nhiều ngôn ngữ cùng lúc — đây là thứ giúp câu pha tiếng Việt lẫn tiếng Anh chạy đúng. Bấm để bật/tắt; số là thứ tự ưu tiên.",
+      "Soniox và Gemini nhận nhiều ngôn ngữ cùng lúc — hữu ích khi câu nói trộn tiếng Việt và tiếng Anh. Bấm để bật/tắt; số là thứ tự ưu tiên.",
     aiSection: "AI tinh chỉnh",
     provider: "Nhà cung cấp",
     providerHint: "Bất kỳ endpoint nào tương thích OpenAI đều dùng được, kể cả Ollama chạy máy nhà.",
@@ -679,9 +682,12 @@ const vi: Dictionary = {
   stt: {
     best_vietnamese: "Chuẩn tiếng Việt",
     free_credit: "Miễn phí {amount}",
+    free_tier: "Free tier",
     paid: "Trả phí — ${price}/giờ",
     soniox:
       "Nghe chuẩn nhất khi bạn nói tiếng Việt lẫn tiếng Anh trong cùng một câu. Tính tiền ngay từ phút đầu, nhưng lại rẻ nhất theo giờ.",
+    gemini:
+      "Gemini 3.5 Transcribe Live: có free tier, nhận nhiều ngôn ngữ và custom vocabulary cho thuật ngữ ô tô.",
     deepgram:
       "Credit miễn phí lớn nhất — đủ dùng hàng trăm giờ. Nghe tiếng Việt được, nhưng câu trộn tiếng Anh thì kém Soniox rõ rệt.",
     assembly_ai:

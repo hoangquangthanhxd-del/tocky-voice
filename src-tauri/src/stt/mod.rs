@@ -7,6 +7,7 @@
 
 pub mod assemblyai;
 pub mod deepgram;
+pub mod gemini;
 pub mod soniox;
 
 use crate::audio::capture::TARGET_SAMPLE_RATE;
@@ -35,6 +36,10 @@ const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 /// same `select!` that reads results, so a stalled write freezes the whole take.
 const SEND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// Gemini Live requires an application-level setup acknowledgement before it accepts
+/// audio; keep that wait bounded so an unusable model never leaves the overlay stuck.
+const SETUP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// Smallest audio frame worth putting on the wire, in bytes of 16 kHz mono PCM16.
 ///
 /// The microphone hands us whatever the device's buffer size works out to — often 10 ms
@@ -58,8 +63,16 @@ pub trait WsProtocol: Send {
     fn request(&self) -> Result<Request<()>>;
     /// Configuration frame sent before any audio, if the vendor needs one.
     fn init_message(&self) -> Option<Message>;
+    /// Whether microphone audio must wait for a provider-specific setup response.
+    fn requires_setup_ack(&self) -> bool { false }
+    /// Checks an application-level setup acknowledgement.
+    fn is_setup_ack(&self, _text: &str) -> bool { false }
+    /// Encodes a PCM frame for this provider.
+    fn audio_message(&self, bytes: Vec<u8>) -> Message { Message::Binary(bytes) }
     /// Frame that tells the vendor no more audio is coming.
     fn finish_message(&self) -> Message;
+    /// Returns true when a provider marks its final response complete during drain.
+    fn drain_complete(&self, _text: &str) -> bool { false }
     /// Turn one inbound text frame into zero or more transcript events.
     ///
     /// Returns `Err` when the frame is the vendor telling us the session is over —
@@ -89,6 +102,7 @@ pub fn build_protocol_with_vocabulary(
         SttProviderKind::AssemblyAi => {
             Box::new(assemblyai::AssemblyAi::new(api_key, provider_terms))
         }
+        SttProviderKind::Gemini => Box::new(gemini::Gemini::with_terms(settings, api_key, provider_terms)),
     }
 }
 
@@ -114,6 +128,9 @@ pub async fn run_stream(
     if let Some(init) = protocol.init_message() {
         writer.send(init).await.context("sending stt config")?;
     }
+    if protocol.requires_setup_ack() {
+        wait_for_setup_ack(&mut writer, &mut reader, &mut protocol).await?;
+    }
 
     let mut transcript = String::new();
     let mut audio_done = false;
@@ -132,7 +149,7 @@ pub async fn run_stream(
                     if pending.len() >= MIN_FRAME_BYTES {
                         let frame = std::mem::take(&mut pending);
                         pending.reserve(MIN_FRAME_BYTES * 2);
-                        if let Err(e) = send_bounded(&mut writer, Message::Binary(frame)).await {
+                        if let Err(e) = send_bounded(&mut writer, protocol.audio_message(frame)).await {
                             log::warn!("stt socket unusable while sending audio: {e}");
                             broke_early = Some(format!("the connection dropped mid-take: {e}"));
                             audio_done = true;
@@ -144,7 +161,7 @@ pub async fn run_stream(
                     // The tail is usually shorter than a full frame. Vendors accept a
                     // short final frame; dropping it would clip the last syllable.
                     if !pending.is_empty() {
-                        let tail = Message::Binary(std::mem::take(&mut pending));
+                        let tail = protocol.audio_message(std::mem::take(&mut pending));
                         let _ = send_bounded(&mut writer, tail).await;
                     }
                     let _ = send_bounded(&mut writer, protocol.finish_message()).await;
@@ -161,6 +178,21 @@ pub async fn run_stream(
                         let _ = events.send(event);
                     }
                 }
+                Some(Ok(Message::Binary(bytes))) => {
+                    log::debug!("speech provider RX binary: {} bytes", bytes.len());
+                    if let Ok(text) = std::str::from_utf8(&bytes) {
+                        for event in protocol.parse(text)? {
+                            if let SttEvent::Final(ref t) = event {
+                                append_segment(&mut transcript, t);
+                            }
+                            let _ = events.send(event);
+                        }
+                    }
+                }
+                Some(Ok(Message::Ping(payload))) => {
+                    send_bounded(&mut writer, Message::Pong(payload)).await?;
+                }
+                Some(Ok(Message::Pong(_))) => {}
                 // A close before the user has finished speaking is the provider ending
                 // the session on us, and its reason is the only clue about why.
                 Some(Ok(Message::Close(frame))) => {
@@ -176,14 +208,14 @@ pub async fn run_stream(
                     }
                     break;
                 }
-                Some(Ok(_)) => {}
+                Some(Ok(_)) => log::debug!("speech provider RX unhandled websocket frame"),
                 Some(Err(e)) => return Err(anyhow!("speech provider stream error: {e}")),
             },
         }
 
         // Once audio has stopped, give the provider a bounded window to flush.
         if audio_done {
-            match tokio::time::timeout(DRAIN_TIMEOUT, drain(&mut reader, &mut protocol, &events))
+            match tokio::time::timeout(DRAIN_TIMEOUT, drain(&mut writer, &mut reader, &mut protocol, &events))
                 .await
             {
                 Ok(Ok(tail)) => {
@@ -316,12 +348,48 @@ mod send_tests {
     }
 }
 
+type WsWriter = futures_util::stream::SplitSink<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    Message,
+>;
 type WsReader = futures_util::stream::SplitStream<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 >;
 
 /// Reads until the provider closes the socket, collecting any remaining final text.
+async fn wait_for_setup_ack(
+    writer: &mut WsWriter,
+    reader: &mut WsReader,
+    protocol: &mut Box<dyn WsProtocol>,
+) -> Result<()> {
+    let wait = async {
+        while let Some(msg) = reader.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    let _ = protocol.parse(&text)?;
+                    if protocol.is_setup_ack(&text) { return Ok(()); }
+                }
+                Ok(Message::Binary(bytes)) => {
+                    if let Ok(text) = std::str::from_utf8(&bytes) {
+                        let _ = protocol.parse(text)?;
+                        if protocol.is_setup_ack(text) { return Ok(()); }
+                    }
+                }
+                Ok(Message::Ping(payload)) => send_bounded(writer, Message::Pong(payload)).await?,
+                Ok(Message::Close(frame)) => return Err(anyhow!("{}", close_reason(frame.as_ref()))),
+                Ok(_) => {}
+                Err(e) => return Err(anyhow!("speech provider setup error: {e}")),
+            }
+        }
+        Err(anyhow!("the provider closed before setup completed"))
+    };
+    tokio::time::timeout(SETUP_TIMEOUT, wait).await.map_err(|_| anyhow!(
+        "speech provider setup did not complete within {}s", SETUP_TIMEOUT.as_secs()
+    ))?
+}
+
 async fn drain(
+    writer: &mut WsWriter,
     reader: &mut WsReader,
     protocol: &mut Box<dyn WsProtocol>,
     events: &UnboundedSender<SttEvent>,
@@ -330,13 +398,26 @@ async fn drain(
     while let Some(msg) = reader.next().await {
         match msg {
             Ok(Message::Text(text)) => {
+                let complete = protocol.drain_complete(&text);
                 for event in protocol.parse(&text)? {
                     if let SttEvent::Final(ref t) = event {
                         tail.push(t.clone());
                     }
                     let _ = events.send(event);
                 }
+                if complete { break; }
             }
+            Ok(Message::Binary(bytes)) => {
+                if let Ok(text) = std::str::from_utf8(&bytes) {
+                    let complete = protocol.drain_complete(text);
+                    for event in protocol.parse(text)? {
+                        if let SttEvent::Final(ref t) = event { tail.push(t.clone()); }
+                        let _ = events.send(event);
+                    }
+                    if complete { break; }
+                }
+            }
+            Ok(Message::Ping(payload)) => send_bounded(writer, Message::Pong(payload)).await?,
             Ok(Message::Close(_)) => break,
             Ok(_) => {}
             Err(e) => return Err(anyhow!("{e}")),
@@ -370,7 +451,7 @@ pub(crate) fn request_with_header(
 ) -> Result<Request<()>> {
     let mut request = url
         .into_client_request()
-        .with_context(|| format!("building websocket request for {url}"))?;
+        .context("building websocket request")?;
     request
         .headers_mut()
         .insert(name, value.parse().context("invalid auth header value")?);
