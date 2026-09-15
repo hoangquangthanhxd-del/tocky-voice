@@ -58,8 +58,11 @@ pub fn llm_presets() -> &'static [LlmPreset] {
             label: "Google Gemini",
             wire: LlmWire::OpenAiCompatible,
             base_url: "https://generativelanguage.googleapis.com/v1beta/openai",
-            default_model: "gemini-2.5-flash",
-            models: &["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
+            // Gemini retired the 2.5 family for newly issued keys. Keep the bundled
+            // default on the supported Flash model so a fresh install's connection
+            // check does not fail with a 404 before the user can dictate.
+            default_model: "gemini-3.6-flash",
+            models: &["gemini-3.6-flash"],
             secret_key: "gemini",
             signup_url: "https://aistudio.google.com/apikey",
             needs_key: true,
