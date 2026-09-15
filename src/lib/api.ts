@@ -48,6 +48,8 @@ export const cancelRecording = () => invoke<void>("cancel_recording");
 export const setOverlaySuppressed = (suppressed: boolean) =>
   invoke<void>("set_overlay_suppressed", { suppressed });
 export const toggleRecording = () => invoke<void>("toggle_recording");
+/** Brings the settings window forward from the floating dictation panel. */
+export const showMainWindow = () => invoke<void>("show_main_window");
 export const setActiveMode = (modeId: string) =>
   invoke<void>("set_active_mode", { modeId });
 

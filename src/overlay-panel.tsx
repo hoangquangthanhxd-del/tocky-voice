@@ -1,114 +1,174 @@
 /**
  * The floating readout shown while dictating from another app.
  *
- * Everything except the two buttons is click-through by design: this window must not
- * take keyboard focus, or the paste keystroke lands here instead of in the app the
- * user was typing into. The buttons are safe because the previously-frontmost app is
- * reactivated before the keystroke — see `focus.rs`.
+ * On a phone the panel starts as one quiet line, then expands only when someone
+ * wants to correct or send the text. The same component remains useful on desktop:
+ * it can be collapsed at any time, and its narrow edge remains a drag surface.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useEffect, useRef, useState, type PointerEvent, type ReactElement } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./lib/api";
-import { formatAccelerator } from "./lib/format-accelerator";
-import { useDictationEvents, useElapsed } from "./lib/use-dictation-events";
-import { useT } from "./lib/i18n";
 import { formatError } from "./lib/format-error";
-import { Waveform } from "./components/waveform";
-import type { AppSettings } from "./lib/types";
+import { useDictationEvents } from "./lib/use-dictation-events";
+import { useT } from "./lib/i18n";
+import {
+  CloseIcon,
+  CollapseIcon,
+  ExpandIcon,
+  ProcessIcon,
+  SendIcon,
+  SettingsIcon,
+} from "./components/icons";
+
+const isMobileDevice = () => /android|iphone|ipad|ipod/i.test(navigator.userAgent);
 
 export function OverlayPanel() {
-  const { phase, modeName, transcript, partial, levels, startedAt, error } =
-    useDictationEvents();
-  const elapsed = useElapsed(startedAt);
+  const { phase, transcript, partial, error } = useDictationEvents();
   const t = useT();
-  const textRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(isMobileDevice);
+  const [editableText, setEditableText] = useState("");
+  const [edited, setEdited] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const textRef = useRef<HTMLInputElement>(null);
 
-  // Keep the newest words in view. The panel is a fixed height, so on a long dictation
-  // the beginning scrolls away rather than the end being clipped — what you just said
-  // is the part you need to see.
-  useEffect(() => {
-    const node = textRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [transcript, partial]);
-
+  const incomingText = error
+    ? formatError(error, t)
+    : [transcript, partial].filter(Boolean).join(" ");
+  const displayText = editableText;
   const recording = phase === "recording";
 
+  // Recognition events remain authoritative until the user changes the field. Once
+  // edited, preserve the correction even if a late event arrives from the provider.
+  useEffect(() => {
+    if (!edited) setEditableText(incomingText ?? "");
+    setCopied(false);
+  }, [incomingText, edited]);
+
+  // A new take is a new editable result. It must not inherit the edited lock from the
+  // last one, otherwise its live words would never reach the textbox.
+  useEffect(() => {
+    if (phase === "recording") setEdited(false);
+  }, [phase]);
+
+  // An input only horizontally scrolls to its caret while focused. The floating
+  // readout must also reveal the newest words while the user is not touching it.
+  useEffect(() => {
+    const node = textRef.current;
+    if (node) node.scrollLeft = node.scrollWidth;
+  }, [displayText, compact]);
+
+  const startDragging = (event: PointerEvent<HTMLDivElement>) => {
+    if (
+      event.button !== 0 ||
+      (event.target as HTMLElement).closest("[data-overlay-control]")
+    ) {
+      return;
+    }
+    getCurrentWindow().startDragging().catch(() => undefined);
+  };
+
+  const close = () => {
+    if (recording || phase !== "idle") api.cancelRecording().catch(() => undefined);
+    getCurrentWindow().hide().catch(() => undefined);
+  };
+
+  const send = () => {
+    if (!displayText.trim()) return;
+    api
+      .copyText(displayText)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
+      })
+      .catch(() => undefined);
+  };
+
   return (
-    <div className="overlay">
-      <div className="overlay__top">
-        <span className={`overlay__dot overlay__dot--${phase}`} />
-        <span className="overlay__phase">{t.phase[phase]}</span>
-        {modeName && <span className="overlay__mode">{modeName}</span>}
-        {elapsed && <span className="overlay__timer">{elapsed}</span>}
-      </div>
-
-      <Waveform levels={levels} active={recording} size="sm" />
-
-      <div className="overlay__text" ref={textRef}>
-        {error ? (
-          <span className="overlay__error">{formatError(error, t)}</span>
-        ) : transcript || partial ? (
-          <>
-            {transcript}
-            {partial && (
-              <span className="overlay__partial">
-                {transcript ? " " : ""}
-                {partial}
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="overlay__hint">{t.overlay.speak}</span>
-        )}
-      </div>
-
-      {recording && <Controls />}
+    <div
+      className={`overlay overlay--${compact ? "compact" : "expanded"}`}
+      onPointerDown={startDragging}
+    >
+      {compact ? (
+        <div className="overlay__compact-line">
+          <span className={`overlay__dot overlay__dot--${phase}`} aria-hidden="true" />
+          <span className={`overlay__compact-text ${error ? "overlay__error" : ""}`}>
+            {displayText || t.overlay.speak}
+          </span>
+          <IconButton
+            label={t.overlay.expand}
+            onClick={() => setCompact(false)}
+            Icon={ExpandIcon}
+          />
+        </div>
+      ) : (
+        <div className="overlay__expanded-line">
+          {/* The field is intentionally a single line: it keeps the panel short and
+              makes the newest character reachable without growing over other apps. */}
+          <input
+            ref={textRef}
+            className={`overlay__result ${error ? "overlay__result--error" : ""}`}
+            aria-label={t.overlay.resultLabel}
+            value={displayText}
+            placeholder={t.overlay.speak}
+            onPointerDown={(event) => event.stopPropagation()}
+            onChange={(event) => {
+              setEdited(true);
+              setEditableText(event.currentTarget.value);
+            }}
+          />
+          <div className="overlay__actions" data-overlay-control>
+            <IconButton label={t.overlay.close} onClick={close} Icon={CloseIcon} danger />
+            <IconButton
+              label={t.overlay.collapse}
+              onClick={() => setCompact(true)}
+              Icon={CollapseIcon}
+            />
+            <IconButton
+              label={t.overlay.settings}
+              onClick={() => api.showMainWindow().catch(() => undefined)}
+              Icon={SettingsIcon}
+            />
+            <IconButton
+              label={recording ? t.overlay.process : t.overlay.processUnavailable}
+              onClick={() => api.stopRecording().catch(() => undefined)}
+              Icon={ProcessIcon}
+              disabled={!recording}
+            />
+            <IconButton
+              label={copied ? t.overlay.copied : t.overlay.send}
+              onClick={send}
+              Icon={SendIcon}
+              disabled={!displayText.trim()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/**
- * Both a keyboard reminder and real buttons. The overlay is click-through, so without
- * the reminder there is no visible way to end a take; without the buttons, anyone who
- * reaches for the mouse is stuck.
- */
-function Controls() {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
-  const t = useT();
+type IconButtonProps = {
+  label: string;
+  onClick: () => void;
+  Icon: (props: { className?: string }) => ReactElement;
+  disabled?: boolean;
+  danger?: boolean;
+};
 
-  useEffect(() => {
-    const load = () => api.getSettings().then(setSettings).catch(() => undefined);
-    load();
-    const off = listen(api.EVENTS.settingsChanged, load);
-    return () => {
-      off.then((fn) => fn()).catch(() => undefined);
-    };
-  }, []);
-
-  const stop = formatAccelerator(settings?.hotkeys.toggle ?? null);
-
+function IconButton({ label, onClick, Icon, disabled, danger }: IconButtonProps) {
   return (
-    <div className="overlay__foot">
-      {/* Named after what the key does, not just what it is called. This panel is on
-          screen at the exact moment someone is wondering how to end a take. */}
-      <div className="overlay__keys">
-        {stop && (
-          <span className="overlay__key">
-            <kbd>{stop}</kbd>
-            <span>{t.overlay.stop}</span>
-          </span>
-        )}
-      </div>
-
-      <div className="overlay__buttons">
-        <button className="btn-quiet" onClick={() => api.cancelRecording()}>
-          {t.common.cancel}
-        </button>
-        <button className="btn-primary" onClick={() => api.stopRecording()}>
-          {t.dictate.stop}
-        </button>
-      </div>
-    </div>
+    <button
+      type="button"
+      className={`overlay__icon-button ${danger ? "overlay__icon-button--danger" : ""}`}
+      aria-label={label}
+      title={label}
+      data-overlay-control
+      disabled={disabled}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={onClick}
+    >
+      <Icon className="overlay__icon" />
+    </button>
   );
 }

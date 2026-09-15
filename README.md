@@ -142,7 +142,8 @@ Chỉ có một cách bắt đầu: bấm một lần để thu, bấm lần n�
 ### Dùng từ PTAP web (V6)
 
 TOCKY 0.5 mở bridge WebSocket chỉ trên loopback `127.0.0.1:17891/bridge`; bridge không
-nghe trên LAN và chỉ upgrade Origin PTAP staging/preview hoặc loopback development. PTAP web lấy snapshot thuật ngữ đang active từ Supabase bằng phiên đăng nhập,
+nghe trên LAN và chỉ upgrade Origin PTAP staging/production/preview đã pin hoặc loopback
+development. PTAP web lấy snapshot thuật ngữ đang active từ Supabase bằng phiên đăng nhập,
 gửi nguyên revision/fingerprint/snapshot cho TOCKY, và mỗi lần ghi âm pin một snapshot bất
 biến đến khi session kết thúc. TOCKY kiểm tra collision, revision và SHA-256 trước khi dùng,
 lưu cache có checksum để dùng khi backend tạm offline, chuẩn hoá transcript cục bộ rồi mới

@@ -57,6 +57,45 @@ export const InfoIcon = ({ className }: Props) => (
   </svg>
 );
 
+/** Small action glyphs for the compact dictation overlay. */
+export const CloseIcon = ({ className }: Props) => (
+  <svg {...base} className={className} aria-hidden="true">
+    <path d="m4 4 8 8M12 4l-8 8" />
+  </svg>
+);
+
+export const CollapseIcon = ({ className }: Props) => (
+  <svg {...base} className={className} aria-hidden="true">
+    <path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5" />
+  </svg>
+);
+
+export const ExpandIcon = ({ className }: Props) => (
+  <svg {...base} className={className} aria-hidden="true">
+    <path d="M3 8h10M6.5 4.5 3 8l3.5 3.5" />
+  </svg>
+);
+
+export const SettingsIcon = ({ className }: Props) => (
+  <svg {...base} className={className} aria-hidden="true">
+    <circle cx="8" cy="8" r="2.2" />
+    <path d="M8 1.9v1.4M8 12.7v1.4M14.1 8h-1.4M3.3 8H1.9M12.3 3.7l-1 1M4.7 11.3l-1 1M12.3 12.3l-1-1M4.7 4.7l-1-1" />
+  </svg>
+);
+
+export const ProcessIcon = ({ className }: Props) => (
+  <svg {...base} className={className} aria-hidden="true">
+    <path d="M8 2.25v5.1l3.4 2.05" />
+    <circle cx="8" cy="8" r="5.75" />
+  </svg>
+);
+
+export const SendIcon = ({ className }: Props) => (
+  <svg {...base} className={className} aria-hidden="true">
+    <path d="m2.25 2.5 11.5 5.5-11.5 5.5 2.1-4.15H9.5V6.65H4.35L2.25 2.5Z" />
+  </svg>
+);
+
 /**
  * Brand mark — the app icon at sidebar size, drawn as a line glyph.
  *

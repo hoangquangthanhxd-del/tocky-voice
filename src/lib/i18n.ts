@@ -249,6 +249,15 @@ const en = {
     // do with the key rather than only naming it. Kept short: this is a 480px HUD
     // glanced at mid-sentence, not the place to teach — that is the Dictate tab.
     stop: "press to stop and paste",
+    resultLabel: "Recognized text",
+    close: "Close and discard this take",
+    collapse: "Collapse overlay",
+    expand: "Expand overlay",
+    settings: "Open settings",
+    process: "Finish recording and process",
+    processUnavailable: "Processing starts after recording stops",
+    send: "Copy text to clipboard",
+    copied: "Copied to clipboard",
   },
 
   recorder: {
@@ -571,6 +580,15 @@ const vi: Dictionary = {
   overlay: {
     speak: "Nói đi…",
     stop: "bấm để dừng và dán",
+    resultLabel: "Nội dung nhận diện",
+    close: "Đóng và huỷ lần ghi này",
+    collapse: "Thu gọn cửa sổ",
+    expand: "Mở rộng cửa sổ",
+    settings: "Mở cài đặt",
+    process: "Dừng ghi và xử lý",
+    processUnavailable: "Xử lý bắt đầu sau khi dừng ghi",
+    send: "Chép nội dung vào clipboard",
+    copied: "Đã chép vào clipboard",
   },
 
   recorder: {

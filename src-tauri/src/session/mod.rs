@@ -13,7 +13,7 @@ use crate::overlay;
 use crate::settings::secrets;
 use crate::state::{self, emit_error, events, Phase};
 use crate::stt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
@@ -64,12 +64,33 @@ const AUDIBLE_PEAK: f32 = 0.01;
 /// app is restarted. Generous enough that a merely slow provider still lands.
 const FINALIZE_TIMEOUT: Duration = Duration::from_secs(20);
 
+// Publishing a take requires opening the microphone and starting the provider, so
+// `active` cannot protect the period before the fully constructed take is stored.
+// Reserve that period as well: otherwise two near-simultaneous bridge requests can
+// both observe an idle recorder and the later one overwrites the first take.
+const START_IDLE: u8 = 0;
+const STARTING: u8 = 1;
+const START_CANCELLED: u8 = 2;
+
 #[derive(Default)]
 pub struct Recorder {
+    /// Atomic reservation for setup before `active` can hold the fully constructed
+    /// take. This covers hotkey and bridge starts alike.
+    start_state: AtomicU8,
     active: Mutex<Option<ActiveTake>>,
     /// Present while a stopped take is still waiting on the provider. Sending on it
     /// abandons that wait — the escape hatch from a socket that never answers.
     finalizing: Mutex<Option<oneshot::Sender<()>>>,
+}
+
+struct StartReservation<'a> {
+    state: &'a AtomicU8,
+}
+
+impl Drop for StartReservation<'_> {
+    fn drop(&mut self) {
+        self.state.store(START_IDLE, Ordering::Release);
+    }
 }
 
 impl Recorder {
@@ -78,6 +99,27 @@ impl Recorder {
             .lock()
             .map(|slot| slot.is_some())
             .unwrap_or(false)
+    }
+
+    fn try_reserve_start(&self) -> Option<StartReservation<'_>> {
+        self.start_state
+            .compare_exchange(START_IDLE, STARTING, Ordering::AcqRel, Ordering::Acquire)
+            .ok()?;
+        Some(StartReservation {
+            state: &self.start_state,
+        })
+    }
+
+    fn cancel_pending_start(&self) -> bool {
+        match self.start_state.compare_exchange(
+            STARTING,
+            START_CANCELLED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) | Err(START_CANCELLED) => true,
+            Err(_) => false,
+        }
     }
 }
 
@@ -107,6 +149,9 @@ fn start_internal(
     bridge: Option<BridgeTake>,
 ) -> anyhow::Result<()> {
     let recorder = app.state::<Recorder>();
+    let Some(_start_reservation) = recorder.try_reserve_start() else {
+        anyhow::bail!("a dictation session is already starting");
+    };
     if recorder.is_recording() {
         anyhow::bail!("a dictation session is already active");
     }
@@ -190,20 +235,34 @@ fn start_internal(
     let protocol = stt::build_protocol_with_vocabulary(&settings.stt, api_key, provider_terms);
     let stt_task = tauri::async_runtime::spawn(stt::run_stream(protocol, audio_rx, event_tx));
 
-    if let Ok(mut slot) = recorder.active.lock() {
-        *slot = Some(ActiveTake {
-            capture,
-            audio_tx: Some(audio_tx),
-            cancelled: Arc::new(AtomicBool::new(false)),
-            heard_audio,
-            pcm,
-            mode_id: mode_id.clone(),
-            target_app,
-            stt_task,
-            vocabulary,
-            bridge: bridge.clone(),
-        });
+    let Ok(mut slot) = recorder.active.lock() else {
+        capture.stop();
+        stt_task.abort();
+        anyhow::bail!("dictation recorder is unavailable");
+    };
+    if recorder.start_state.load(Ordering::Acquire) == START_CANCELLED {
+        capture.stop();
+        stt_task.abort();
+        anyhow::bail!("dictation start was cancelled");
     }
+    if slot.is_some() {
+        capture.stop();
+        stt_task.abort();
+        anyhow::bail!("a dictation session is already active");
+    }
+    *slot = Some(ActiveTake {
+        capture,
+        audio_tx: Some(audio_tx),
+        cancelled: Arc::new(AtomicBool::new(false)),
+        heard_audio,
+        pcm,
+        mode_id: mode_id.clone(),
+        target_app,
+        stt_task,
+        vocabulary,
+        bridge: bridge.clone(),
+    });
+    drop(slot);
 
     // Pump: capture thread → PCM archive + level meter → provider socket.
     //
@@ -400,10 +459,45 @@ pub fn cancel(app: &AppHandle) {
         return;
     }
 
+    if recorder.cancel_pending_start() {
+        return;
+    }
+
     // Nothing recording: there may still be a stopped take waiting on the provider.
     // The finalize task owns the state, so it is told to give up and does the rest.
     if let Some(abort) = recorder.finalizing.lock().ok().and_then(|mut s| s.take()) {
         let _ = abort.send(());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn start_reservation_prevents_overlapping_bridge_or_hotkey_starts() {
+        let recorder = Recorder::default();
+        let first = recorder
+            .try_reserve_start()
+            .expect("first caller should reserve setup");
+        assert!(recorder.try_reserve_start().is_none());
+        drop(first);
+        assert!(recorder.try_reserve_start().is_some());
+    }
+
+    #[test]
+    fn cancellation_marks_an_incomplete_start_before_it_can_be_published() {
+        let recorder = Recorder::default();
+        let reservation = recorder
+            .try_reserve_start()
+            .expect("start should reserve setup");
+        assert!(recorder.cancel_pending_start());
+        assert_eq!(
+            recorder.start_state.load(Ordering::Acquire),
+            START_CANCELLED
+        );
+        drop(reservation);
+        assert_eq!(recorder.start_state.load(Ordering::Acquire), START_IDLE);
     }
 }
 

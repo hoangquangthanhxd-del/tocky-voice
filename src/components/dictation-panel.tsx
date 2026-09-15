@@ -26,6 +26,10 @@ export function DictationPanel({ settings, onSettingsChange }: Props) {
   const { phase, transcript, partial, levels, startedAt, error } = useDictationEvents();
   const elapsed = useElapsed(startedAt);
   const [devices, setDevices] = useState<string[]>([]);
+  // Keep a local value for the readout so a finished recognition can be corrected
+  // before it is copied. New recognizer events remain the source of truth while a
+  // take is in progress and replace this value as they arrive.
+  const [editableText, setEditableText] = useState("");
   const { accessibility } = usePermissionStatus();
   const t = useT();
 
@@ -36,6 +40,10 @@ export function DictationPanel({ settings, onSettingsChange }: Props) {
   const recording = phase === "recording";
   const busy = BUSY.includes(phase);
   const text = [transcript, partial].filter(Boolean).join(" ");
+
+  useEffect(() => {
+    setEditableText(text);
+  }, [text]);
 
   return (
     <>
@@ -77,8 +85,8 @@ export function DictationPanel({ settings, onSettingsChange }: Props) {
               {t.common.cancel}
             </button>
           )}
-          {text && !recording && (
-            <button className="btn-quiet" onClick={() => api.copyText(text)}>
+          {editableText && !recording && (
+            <button className="btn-quiet" onClick={() => api.copyText(editableText)}>
               {t.dictate.copyText}
             </button>
           )}
@@ -89,21 +97,14 @@ export function DictationPanel({ settings, onSettingsChange }: Props) {
             in another window. */}
         <HotkeyHints hotkeys={settings.hotkeys} />
 
-        <div className="transcript">
-          {text ? (
-            <>
-              {transcript}
-              {partial && (
-                <span className="transcript__partial">
-                  {transcript ? " " : ""}
-                  {partial}
-                </span>
-              )}
-            </>
-          ) : (
-<span className="transcript__empty">{t.dictate.empty}</span>
-          )}
-        </div>
+        <textarea
+          className="transcript"
+          aria-label={t.dictate.title}
+          value={editableText}
+          placeholder={t.dictate.empty}
+          onChange={(event) => setEditableText(event.currentTarget.value)}
+          rows={5}
+        />
       </div>
 
       {error && <div className="notice notice--error">{formatError(error, t)}</div>}

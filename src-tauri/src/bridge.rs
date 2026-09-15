@@ -17,6 +17,14 @@ use tokio_tungstenite::tungstenite::Message;
 const ADDRESS: &str = "127.0.0.1:17891";
 const PROTOCOL_VERSION: u64 = 1;
 
+// A Pages preview has a generated subdomain beneath its project hostname.  Keep the
+// allowlist at the project boundary rather than accepting arbitrary `pages.dev`
+// sites: this loopback service can start the local microphone.
+const PTAP_PAGES_PROJECTS: &[&str] = &[
+    "ptap-next-staging.pages.dev",
+    "ptap-next-production.pages.dev",
+];
+
 struct Prepared {
     request_id: String,
     nonce: String,
@@ -179,9 +187,12 @@ fn trusted_origin(value: &str) -> bool {
     };
     match scheme {
         "http" => matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1" | "[::1]"),
-        "https" => {
-            host == "ptap-next-staging.pages.dev" || host.ends_with(".ptap-next-staging.pages.dev")
-        }
+        "https" => PTAP_PAGES_PROJECTS.iter().any(|project| {
+            host == *project
+                || host
+                    .strip_suffix(project)
+                    .is_some_and(|prefix| prefix.ends_with('.'))
+        }),
         _ => false,
     }
 }
@@ -248,7 +259,7 @@ mod tests {
     use super::trusted_origin;
 
     #[test]
-    fn bridge_accepts_only_ptap_staging_or_loopback_development_origins() {
+    fn bridge_accepts_only_ptap_pages_projects_or_loopback_development_origins() {
         assert!(trusted_origin("http://localhost:5173"));
         assert!(trusted_origin("http://127.0.0.1:4173"));
         assert!(trusted_origin("http://[::1]:5173"));
@@ -257,6 +268,13 @@ mod tests {
         ));
         assert!(trusted_origin(
             "https://4f359888.ptap-next-staging.pages.dev"
+        ));
+        assert!(trusted_origin("https://ptap-next-production.pages.dev"));
+        assert!(trusted_origin(
+            "https://production-id.ptap-next-production.pages.dev"
+        ));
+        assert!(!trusted_origin(
+            "https://ptap-next-production.pages.dev.evil.example"
         ));
         assert!(!trusted_origin("https://evil.example"));
         assert!(!trusted_origin("null"));
